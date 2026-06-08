@@ -1,0 +1,17 @@
+streamlit
+python-dotenv
+pymupdf
+python-docx
+pandas
+requests
+google-genai
+sentence-transformers
+scikit-learn
+torch
+torchvision
+rapidfuzz
+fastapi
+uvicorn
+python-multipart
+fpdf2
+chromadb

@@ -1,0 +1,261 @@
+Python
+Java
+C
+C++
+C#
+SQL
+MySQL
+PostgreSQL
+MongoDB
+HTML
+HTML5
+CSS
+CSS3
+JavaScript
+TypeScript
+React
+Next.js
+Angular
+Vue.js
+Node.js
+Express.js
+Tailwind CSS
+Bootstrap
+PHP
+Laravel
+Django
+Flask
+FastAPI
+Streamlit
+REST API
+GraphQL
+Git
+GitHub
+VS Code
+Postman
+Docker
+Kubernetes
+AWS
+Azure
+GCP
+TensorFlow
+PyTorch
+Scikit-learn
+Pandas
+NumPy
+Machine Learning
+Deep Learning
+Natural Language Processing
+NLP
+Computer Vision
+Generative AI
+Prompt Engineering
+RAG
+LangChain
+LlamaIndex
+FAISS
+ChromaDB
+Pinecone
+Weaviate
+Milvus
+Hugging Face
+Linux
+Windows
+OOP
+Object Oriented Programming
+Data Structures
+DBMS
+J2EE
+Hibernate
+JPA
+SOAP
+Shell
+Debugging
+Design Patterns
+JDBC
+Spring Boot
+Spring
+Power BI
+Tableau
+Excel
+Advanced Excel
+Tally
+GST
+Accounting
+SEO
+Google Ads
+Meta Ads
+Content Writing
+Canva
+Recruitment
+Payroll
+Onboarding
+HRMS
+CRM
+Lead Generation
+Digital Marketing
+Sales
+Customer Support
+Teaching
+Curriculum Planning
+Medical Coding
+R Programming
+RStudio
+Dart
+Servicenow
+Ansible
+Adobe Xd
+Microcontrollers
+Embedded C
+Unreal Engine
+Network Security
+Firmware
+Firewalls
+.net
+Android
+React Native
+Artificial Intelligence
+Cybersecurity
+Raspberry Pi
+Vpn
+Ethical Hacking
+Data Visualization
+Unity
+Cisco
+Smart Contracts
+Kotlin
+Mern
+Vulnerability Assessment
+Quality Assurance
+Penetration Testing
+Data Analysis
+Swift
+Asp.net
+Mobile Application Development
+Owasp
+Qa
+Ethereum
+Tcp/ip
+Bash
+Game Programming
+Sql Server
+Dns
+Ios
+Junit
+3d Modeling
+Appium
+Hyperledger
+Cassandra
+Automation Testing
+Prototyping
+Terraform
+Github Actions
+Solidity
+User Interface
+Testng
+Jenkins
+Pytest
+Information Security
+Routing
+Troubleshooting
+Blockchain
+Shell Scripting
+Help Desk
+System Administration
+Ticketing Systems
+Sketch
+Database Design
+Wireframing
+Technical Support
+Selenium
+User Experience
+CI/CD
+Rtos
+Networking
+Jira
+Database Administration
+Game Design
+UI
+Cypress
+Figma
+Rust
+Powershell
+Cryptography
+Active Directory
+Dba
+Iot
+Flutter
+Ccna
+Dhcp
+Arduino
+UX
+Web3
+Manual Testing
+Redis
+Oracle
+Windows Server
+Switching
+Usability Testing
+
+Keras
+Matplotlib
+Seaborn
+OpenCV
+NLTK
+Spacy
+XGBoost
+LightGBM
+Apache Spark
+Hadoop
+Kafka
+Snowflake
+Databricks
+BigQuery
+Redshift
+Airflow
+dbt
+Fivetran
+Looker
+GitLab CI
+CircleCI
+ArgoCD
+Google Cloud Platform
+Heroku
+Vercel
+Netlify
+DigitalOcean
+Cloudflare
+Vim
+Emacs
+Confluence
+Trello
+Asana
+Notion
+gRPC
+WebSockets
+RabbitMQ
+Memcached
+Elasticsearch
+Solr
+DynamoDB
+Neo4j
+Firebase
+Supabase
+Apollo
+Prisma
+TypeORM
+Sequelize
+Mongoose
+Go
+Golang
+Ionic
+Electron
+Svelte
+SvelteKit
+Nuxt.js
+Gatsby
+Remix
+Astro
+NestJS
+Ruby on Rails
+Phoenix
