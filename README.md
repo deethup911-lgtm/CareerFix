@@ -13,7 +13,6 @@ CareerFix is a full-stack AI-powered Applicant Tracking System (ATS) simulator a
 - **ATS Score Simulator** — Simulates how a corporate ATS software would score your resume against a job: keyword density, section detection, formatting checks, length analysis.
 - **AI Resume Tips** — Gemini 2.0 Flash generates custom summary rewrites and bullet point fixes for each specific job.
 - **Interview Question Generator** — 5 targeted interview questions per job (mix of technical + behavioral).
-- **Certification Suggestions** — Recommends real certifications to close your exact skill gaps.
 - **Job Freshness Filter** — Only shows jobs posted within the last 30 days.
 - **Smart Deduplication** — Removes duplicate jobs by title+company hash across all sources.
 - **Dynamic Autocomplete UI** — GeoDB Cities API for location autocomplete. Local suggestions for job titles.
@@ -131,7 +130,6 @@ Frontend runs on `http://localhost:5173`
 | `POST` | `/api/get-resume-suggestions` | AI-tailored resume tips |
 | `POST` | `/api/ats-score` | ATS simulation score |
 | `POST` | `/api/interview-questions` | Generate 5 interview questions |
-| `POST` | `/api/certifications` | Recommend certifications for skill gaps |
 | `GET` | `/api/locations/autocomplete?q=` | City autocomplete via GeoDB |
 
 ---
@@ -144,7 +142,7 @@ Frontend runs on `http://localhost:5173`
 2. Gemini 2.0 Flash extracts skills, experience, domain
    [Fallback: local 488-skill dictionary]
           ↓
-3. Role Recommender suggests junior-appropriate job titles
+3. Role Recommender suggests appropriate job titles based on your experience level
           ↓
 4. User clicks Search → 3 Job APIs queried in parallel threads
    (Adzuna + Remotive + JSearch/Google Jobs)
@@ -156,9 +154,9 @@ Frontend runs on `http://localhost:5173`
           ↓
 7. Semantic Match Score = Skill Match (40%) + Exp Fit (30%) + Semantic Sim (30%)
           ↓
-8. Top matches displayed with salary, job type, date badges
+8. Top matches displayed with job type and date badges
           ↓
-9. Per job: ATS Score | AI Resume Tips | Interview Questions | Certifications
+9. Per job: ATS Score | AI Resume Tips | Interview Questions
 ```
 
 ---
