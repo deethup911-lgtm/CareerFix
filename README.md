@@ -173,6 +173,3 @@ Frontend runs on `http://localhost:5173`
 
 ---
 
-## License
-
-MIT License — Free to use, modify and distribute.
