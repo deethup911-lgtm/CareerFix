@@ -259,3 +259,231 @@ Astro
 NestJS
 Ruby on Rails
 Phoenix
+AWS Lambda
+AWS EC2
+AWS S3
+AWS RDS
+AWS SageMaker
+AWS ECS
+AWS EKS
+Azure DevOps
+Azure Functions
+Azure Blob Storage
+Azure Kubernetes Service
+Google BigQuery
+Google Cloud Run
+Google Vertex AI
+Google Pub/Sub
+Transformers
+BERT
+GPT
+Stable Diffusion
+DALL-E
+Whisper
+LLaVA
+Mistral
+Llama
+Ollama
+OpenAI API
+Anthropic
+Gemini API
+Weights & Biases
+MLflow
+DVC
+BentoML
+FastAPI ML
+TorchServe
+ONNX
+TensorRT
+DeepSpeed
+Accelerate
+PEFT
+LoRA
+QLoRA
+Apache Flink
+Apache Beam
+Delta Lake
+Apache Iceberg
+Apache Hudi
+Great Expectations
+dbt Cloud
+Prefect
+Dagster
+Apache NiFi
+Presto
+Trino
+Apache Hive
+Apache Kylin
+Looker Studio
+Power Query
+Google Data Studio
+Metabase
+Apache Superset
+Prometheus
+Grafana
+Datadog
+New Relic
+Splunk
+ELK Stack
+Logstash
+Kibana
+Helm
+Istio
+Linkerd
+Consul
+Vault
+Pulumi
+CloudFormation
+Bicep
+Packer
+Vagrant
+Chef
+Puppet
+SaltStack
+Nagios
+Zabbix
+PagerDuty
+Scala
+Elixir
+Haskell
+Erlang
+Clojure
+F#
+Lua
+Julia
+MATLAB
+Perl
+Visual Basic
+Assembly
+COBOL
+Fortran
+Prolog
+Racket
+Nim
+Zig
+Crystal
+Fastify
+Hono
+Elysia
+tRPC
+Prisma ORM
+Drizzle ORM
+ShadCN UI
+Radix UI
+Headless UI
+Chakra UI
+Material UI
+Ant Design
+Storybook
+Playwright
+Vitest
+Jest
+Webpack
+Vite
+Rollup
+Parcel
+Turbopack
+Babel
+ESLint
+Prettier
+Husky
+lint-staged
+pnpm
+Bun
+Deno
+CockroachDB
+TimescaleDB
+ClickHouse
+Qdrant
+PGVector
+MongoDB Atlas
+Atlas Search
+Fauna
+PlanetScale
+Neon
+Turso
+SingleStore
+MariaDB
+OAuth 2.0
+JWT
+SSL/TLS
+HTTPS
+OWASP Top 10
+Burp Suite
+Nmap
+Wireshark
+Metasploit
+Kali Linux
+SIEM
+SOC
+Incident Response
+Threat Modeling
+Security Auditing
+Zero Trust
+RBAC
+LDAP
+PKI
+HSM
+SwiftUI
+UIKit
+Jetpack Compose
+Kotlin Multiplatform
+Expo
+Capacitor
+NativeScript
+Xamarin
+Unity3D
+ARKit
+ARCore
+Agile
+Scrum
+Kanban
+SAFe
+Prince2
+PMP
+OKRs
+Linear
+Basecamp
+Monday.com
+ClickUp
+Miro
+Whimsical
+Slack
+Teams
+Zoom
+Loom
+Obsidian
+A/B Testing
+Hypothesis Testing
+Statistical Analysis
+Regression Analysis
+Classification
+Clustering
+Time Series
+Anomaly Detection
+Feature Engineering
+Model Evaluation
+Cross Validation
+Hyperparameter Tuning
+Bayesian Statistics
+Monte Carlo
+Markov Chains
+Causal Inference
+Technical Writing
+API Documentation
+Code Review
+System Design
+Microservices
+Event-Driven Architecture
+Domain-Driven Design
+Test-Driven Development
+Behavior-Driven Development
+Pair Programming
+CI/CD Pipelines
+Infrastructure as Code
+GitOps
+Site Reliability
+Observability
+OpenTelemetry
+Distributed Systems
+CAP Theorem

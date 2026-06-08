@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Search, Briefcase, FileSignature, ArrowRight, Loader, Plus, X } from 'lucide-react';
+import { Search, Briefcase, FileSignature, ArrowRight, Loader, Plus, X, Filter } from 'lucide-react';
 import AutocompleteInput from '../components/AutocompleteInput';
 
 export default function OutputPage({ 
@@ -15,12 +15,18 @@ export default function OutputPage({
   const initialRoles = recommendedRoles?.length > 0 ? recommendedRoles.map(r => r.role) : [""];
   const [jobTitles, setJobTitles] = useState(initialRoles);
   const [locations, setLocations] = useState(["Remote", "India"]);
+  const [jobTypeFilter, setJobTypeFilter] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState(null);
   
-  // Track loading state and fetched suggestions per job index
   const [suggestionLoading, setSuggestionLoading] = useState({});
   const [suggestions, setSuggestions] = useState({});
+  const [atsLoading, setAtsLoading] = useState({});
+  const [atsResults, setAtsResults] = useState({});
+  const [interviewLoading, setInterviewLoading] = useState({});
+  const [interviewResults, setInterviewResults] = useState({});
+  const [certLoading, setCertLoading] = useState({});
+  const [certResults, setCertResults] = useState({});
   
   if (!resumeAnalysis) {
     return <Navigate to="/" />;
@@ -46,6 +52,9 @@ export default function OutputPage({
     setJobs([]);
     setMatchedJobs([]);
     setSuggestions({});
+    setAtsResults({});
+    setInterviewResults({});
+    setCertResults({});
     
     try {
       const searchRes = await fetch("http://localhost:8000/api/search-jobs", {
@@ -53,7 +62,8 @@ export default function OutputPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           roles: jobTitles.map(s => s.trim()).filter(Boolean),
-          locations: locations.map(s => s.trim()).filter(Boolean)
+          locations: locations.map(s => s.trim()).filter(Boolean),
+          job_type: jobTypeFilter || null
         })
       });
       
@@ -100,17 +110,100 @@ export default function OutputPage({
           missing_skills: matchData.missing_skills || []
         })
       });
-      
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Failed to get suggestions");
-      
       setSuggestions(prev => ({ ...prev, [idx]: data }));
     } catch (err) {
-      console.error(err);
       alert("Failed to get suggestions: " + err.message);
     } finally {
       setSuggestionLoading(prev => ({ ...prev, [idx]: false }));
     }
+  };
+
+  const handleGetATSScore = async (job, idx) => {
+    setAtsLoading(prev => ({ ...prev, [idx]: true }));
+    try {
+      const res = await fetch("http://localhost:8000/api/ats-score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resume_text: resumeAnalysis.raw_text || JSON.stringify(resumeAnalysis),
+          job_description: job.description
+        })
+      });
+      const data = await res.json();
+      setAtsResults(prev => ({ ...prev, [idx]: data }));
+    } catch (err) {
+      alert("ATS Score failed: " + err.message);
+    } finally {
+      setAtsLoading(prev => ({ ...prev, [idx]: false }));
+    }
+  };
+
+  const handleGetInterviewQuestions = async (job, idx) => {
+    setInterviewLoading(prev => ({ ...prev, [idx]: true }));
+    try {
+      const res = await fetch("http://localhost:8000/api/interview-questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_title: job.title,
+          job_description: job.description,
+          candidate_skills: resumeAnalysis.skills || []
+        })
+      });
+      const data = await res.json();
+      setInterviewResults(prev => ({ ...prev, [idx]: data }));
+    } catch (err) {
+      alert("Interview questions failed: " + err.message);
+    } finally {
+      setInterviewLoading(prev => ({ ...prev, [idx]: false }));
+    }
+  };
+
+  const handleGetCertifications = async (matchData, job, idx) => {
+    setCertLoading(prev => ({ ...prev, [idx]: true }));
+    try {
+      const res = await fetch("http://localhost:8000/api/certifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          missing_skills: matchData.missing_skills || [],
+          job_title: job.title
+        })
+      });
+      const data = await res.json();
+      setCertResults(prev => ({ ...prev, [idx]: data }));
+    } catch (err) {
+      alert("Certifications failed: " + err.message);
+    } finally {
+      setCertLoading(prev => ({ ...prev, [idx]: false }));
+    }
+  };
+
+  const getDaysAgo = (dateStr) => {
+    if (!dateStr) return null;
+    try {
+      const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
+      if (days === 0) return "Today";
+      if (days === 1) return "1 day ago";
+      return `${days} days ago`;
+    } catch { return null; }
+  };
+
+  const getJobTypeColor = (type) => {
+    if (!type) return "#555";
+    if (type === "Internship") return "#7c3aed";
+    if (type === "Contract") return "#d97706";
+    if (type === "Part Time") return "#0891b2";
+    return "#16a34a";
+  };
+
+  const getATSGradeColor = (grade) => {
+    if (grade === "Excellent") return "#16a34a";
+    if (grade === "Good") return "#2563eb";
+    if (grade === "Fair") return "#d97706";
+    return "#dc2626";
   };
 
   return (
@@ -200,13 +293,38 @@ export default function OutputPage({
             ))}
           </div>
         </div>
+
+        {/* Job Type Filter */}
+        <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <Filter size={16} style={{ color: 'var(--text-muted)' }}/>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Job Type:</span>
+          {["", "Full Time", "Part Time", "Contract", "Internship"].map(type => (
+            <button
+              key={type}
+              onClick={() => setJobTypeFilter(type)}
+              style={{
+                padding: '0.25rem 0.75rem',
+                borderRadius: '999px',
+                border: '1px solid var(--border-color)',
+                background: jobTypeFilter === type ? 'var(--primary-green)' : 'transparent',
+                color: jobTypeFilter === type ? 'white' : 'var(--text-muted)',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                transition: 'all 0.2s'
+              }}
+            >
+              {type || "All"}
+            </button>
+          ))}
+        </div>
         
-        {error && <div style={{ color: '#d32f2f', marginBottom: '1rem' }}>{error}</div>}
+        {error && <div style={{ color: '#d32f2f', marginBottom: '1rem', marginTop: '1rem' }}>{error}</div>}
         
         <button 
           className="btn btn-primary" 
           onClick={handleSearch} 
           disabled={isSearching}
+          style={{ marginTop: '1rem' }}
         >
           {isSearching ? 'Searching...' : <><Search size={18} /> Search Jobs</>}
         </button>
@@ -215,7 +333,7 @@ export default function OutputPage({
       {matchedJobs.length > 0 && (
         <>
           <div className="flex justify-between items-center mb-4">
-            <h2>Top Matches</h2>
+            <h2>Top Matches ({matchedJobs.length} jobs)</h2>
           </div>
           
           <div className="grid" style={{ gap: '1rem' }}>
@@ -227,11 +345,32 @@ export default function OutputPage({
                     {m.match_data.final_score}% Match
                   </span>
                 </div>
-                <p style={{ margin: '0.5rem 0', color: 'var(--text-muted)' }}>
+                
+                {/* Meta row: location, exp, source */}
+                <p style={{ margin: '0.5rem 0', color: 'var(--text-muted)', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
                   📍 {m.job.location} &nbsp;|&nbsp; 🎓 <strong>Req Exp:</strong> {m.match_data.job_experience_requirement} &nbsp;|&nbsp; 🏢 <strong>Source:</strong> {m.job.source || "Unknown"}
                 </p>
+
+                {/* Badges Row */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.25rem' }}>
+                  {m.job.job_type && (
+                    <span style={{ padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.75rem', border: `1px solid ${getJobTypeColor(m.job.job_type)}`, color: getJobTypeColor(m.job.job_type) }}>
+                      {m.job.job_type}
+                    </span>
+                  )}
+                  {m.job.salary && (
+                    <span style={{ padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.75rem', border: '1px solid #16a34a', color: '#16a34a' }}>
+                      💰 {m.job.salary}
+                    </span>
+                  )}
+                  {m.job.date_posted && getDaysAgo(m.job.date_posted) && (
+                    <span style={{ padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.75rem', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+                      🕐 {getDaysAgo(m.job.date_posted)}
+                    </span>
+                  )}
+                </div>
                 
-                <div className="flex" style={{ flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem', fontSize: '0.9rem' }}>
+                <div className="flex" style={{ flexWrap: 'wrap', gap: '1rem', marginTop: '0.75rem', fontSize: '0.9rem' }}>
                   <span className="badge badge-outline" style={{ borderColor: 'var(--primary-green)', color: 'var(--primary-green)' }}>
                     Skill Match: {m.match_data.skill_match}%
                   </span>
@@ -257,7 +396,8 @@ export default function OutputPage({
                   ))}
                 </div>
                 
-                <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '1rem' }}>
+                {/* Action Buttons */}
+                <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                   <a href={m.job.url} target="_blank" rel="noreferrer" className="btn btn-primary" style={{ padding: '0.5rem 1rem' }}>
                     Apply Now
                   </a>
@@ -268,11 +408,135 @@ export default function OutputPage({
                     disabled={suggestionLoading[idx]}
                     style={{ padding: '0.5rem 1rem' }}
                   >
-                    {suggestionLoading[idx] ? 'Analyzing...' : '✨ Get AI Resume Suggestions'}
+                    {suggestionLoading[idx] ? 'Analyzing...' : '✨ AI Resume Tips'}
                   </button>
+
+                  <button 
+                    className="btn btn-outline" 
+                    onClick={() => handleGetATSScore(m.job, idx)}
+                    disabled={atsLoading[idx]}
+                    style={{ padding: '0.5rem 1rem' }}
+                  >
+                    {atsLoading[idx] ? 'Scoring...' : '🤖 ATS Score'}
+                  </button>
+
+                  <button 
+                    className="btn btn-outline" 
+                    onClick={() => handleGetInterviewQuestions(m.job, idx)}
+                    disabled={interviewLoading[idx]}
+                    style={{ padding: '0.5rem 1rem' }}
+                  >
+                    {interviewLoading[idx] ? 'Loading...' : '🎯 Interview Prep'}
+                  </button>
+
+                  {m.match_data.missing_skills?.length > 0 && (
+                    <button 
+                      className="btn btn-outline" 
+                      onClick={() => handleGetCertifications(m.match_data, m.job, idx)}
+                      disabled={certLoading[idx]}
+                      style={{ padding: '0.5rem 1rem' }}
+                    >
+                      {certLoading[idx] ? 'Loading...' : '🎓 Certifications'}
+                    </button>
+                  )}
                 </div>
                 
-                {/* Suggestions Section */}
+                {/* ATS Score Panel */}
+                {atsResults[idx] && (
+                  <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(37,99,235,0.08)', borderRadius: '8px', border: '1px solid rgba(37,99,235,0.3)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <h4 style={{ margin: 0, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        ATS Score Simulation
+                      </h4>
+                      <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: getATSGradeColor(atsResults[idx].grade) }}>
+                        {atsResults[idx].ats_score}/100 — {atsResults[idx].grade}
+                      </span>
+                    </div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Keywords ({atsResults[idx].total_jd_keywords || 0} found)</span>
+                        <strong>{atsResults[idx].breakdown.keyword_score}/{atsResults[idx].breakdown.keyword_max} pts</strong>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Sections</span>
+                        <strong>{atsResults[idx].breakdown.section_score}/{atsResults[idx].breakdown.section_max} pts</strong>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Formatting</span>
+                        <strong>{atsResults[idx].breakdown.format_score}/{atsResults[idx].breakdown.format_max} pts</strong>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Length</span>
+                        <strong>{atsResults[idx].breakdown.length_score}/{atsResults[idx].breakdown.length_max} pts</strong>
+                      </div>
+                    </div>
+                    
+                    {atsResults[idx].format_warnings?.length > 0 && (
+                      <div style={{ color: '#fbbf24', fontSize: '0.85rem', marginBottom: '0.75rem', padding: '0.5rem', background: 'rgba(251, 191, 36, 0.1)', borderRadius: '4px' }}>
+                        <strong>Format Warnings:</strong> {atsResults[idx].format_warnings.join(" | ")}
+                      </div>
+                    )}
+                    
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0 0 1rem 0' }}>
+                      <em>{atsResults[idx].length_note}</em>
+                    </p>
+                    
+                    {atsResults[idx].missing_keywords?.length > 0 && (
+                      <div style={{ marginTop: '0.75rem' }}>
+                        <strong style={{ fontSize: '0.85rem', color: '#fca5a5' }}>Top Missing Skills/Keywords:</strong>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.5rem' }}>
+                          {atsResults[idx].missing_keywords.slice(0, 15).map(kw => (
+                            <span key={kw} style={{ padding: '0.15rem 0.5rem', background: 'rgba(220, 38, 38, 0.1)', color: '#fca5a5', borderRadius: '4px', fontSize: '0.75rem', border: '1px solid rgba(220, 38, 38, 0.2)' }}>
+                              {kw}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Interview Questions Panel */}
+                {interviewResults[idx] && (
+                  <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(124,58,237,0.08)', borderRadius: '8px', border: '1px solid rgba(124,58,237,0.3)' }}>
+                    <h4 style={{ margin: '0 0 1rem 0', color: '#a78bfa' }}>🎯 Interview Prep Questions</h4>
+                    {interviewResults[idx].questions?.map((q, i) => (
+                      <div key={i} style={{ marginBottom: '1rem', paddingBottom: '0.75rem', borderBottom: i < interviewResults[idx].questions.length - 1 ? '1px solid rgba(124,58,237,0.2)' : 'none' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                          <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem', borderRadius: '999px', background: q.type === 'Technical' ? 'rgba(37,99,235,0.2)' : 'rgba(220,38,38,0.2)', color: q.type === 'Technical' ? '#60a5fa' : '#fca5a5', flexShrink: 0, marginTop: '2px' }}>
+                            {q.type || "General"}
+                          </span>
+                          <strong style={{ fontSize: '0.9rem' }}>{q.question}</strong>
+                        </div>
+                        {q.tip && <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem', color: '#a78bfa' }}>💡 Tip: {q.tip}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Certifications Panel */}
+                {certResults[idx] && (
+                  <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(217,119,6,0.08)', borderRadius: '8px', border: '1px solid rgba(217,119,6,0.3)' }}>
+                    <h4 style={{ margin: '0 0 1rem 0', color: '#fbbf24' }}>🎓 Recommended Certifications to Close Skill Gaps</h4>
+                    {certResults[idx].certifications?.map((cert, i) => (
+                      <div key={i} style={{ marginBottom: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div>
+                          <strong style={{ fontSize: '0.9rem' }}>{cert.name}</strong>
+                          <span style={{ marginLeft: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>by {cert.provider}</span>
+                          <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Closes gap: <em>{cert.skill_addressed}</em> | ⏱ {cert.duration}</p>
+                        </div>
+                        {cert.url && (
+                          <a href={cert.url} target="_blank" rel="noreferrer" style={{ fontSize: '0.8rem', color: '#fbbf24', textDecoration: 'none', border: '1px solid #fbbf24', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>
+                            Learn →
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* AI Resume Suggestions Panel */}
                 {suggestions[idx] && (
                   <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: 'var(--light-green)', borderRadius: 'var(--radius-sm)' }}>
                     <h4 style={{ color: 'var(--primary-green)', marginBottom: '1rem' }}>Tailoring Suggestions for this Role</h4>

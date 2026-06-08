@@ -32,6 +32,7 @@ app.add_middleware(
 class JobSearchRequest(BaseModel):
     roles: List[str]
     locations: List[str]
+    job_type: Optional[str] = None
 
 class MatchJobsRequest(BaseModel):
     resume_analysis: dict
@@ -46,7 +47,7 @@ class GenerateResumeRequest(BaseModel):
     missing_skills: List[str]
 
 @app.post("/api/analyze-resume")
-async def api_analyze_resume(
+def api_analyze_resume(
     file: Optional[UploadFile] = File(None),
     text: Optional[str] = Form(None)
 ):
@@ -73,16 +74,16 @@ async def api_analyze_resume(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/search-jobs")
-async def api_search_jobs(req: JobSearchRequest):
+def api_search_jobs(req: JobSearchRequest):
     try:
-        raw_jobs = search_jobs(req.roles, req.locations)
+        raw_jobs = search_jobs(req.roles, req.locations, job_type_filter=req.job_type)
         return {"jobs": raw_jobs}
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/match-jobs")
-async def api_match_jobs(req: MatchJobsRequest):
+def api_match_jobs(req: MatchJobsRequest):
     try:
         analysis = req.resume_analysis
         jobs = req.jobs
@@ -153,7 +154,7 @@ async def api_match_jobs(req: MatchJobsRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/get-resume-suggestions")
-async def api_get_resume_suggestions(req: GenerateResumeRequest):
+def api_get_resume_suggestions(req: GenerateResumeRequest):
     try:
         from modules.resume_tailor import tailor_resume
         
@@ -167,6 +168,49 @@ async def api_get_resume_suggestions(req: GenerateResumeRequest):
         )
         
         return tailored_data
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ATSRequest(BaseModel):
+    resume_text: str
+    job_description: str
+
+class InterviewRequest(BaseModel):
+    job_title: str
+    job_description: str
+    candidate_skills: List[str]
+
+class CertificationRequest(BaseModel):
+    missing_skills: List[str]
+    job_title: str
+
+@app.post("/api/ats-score")
+def api_ats_score(req: ATSRequest):
+    try:
+        from modules.ats_simulator import simulate_ats_score
+        result = simulate_ats_score(req.resume_text, req.job_description)
+        return result
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/interview-questions")
+def api_interview_questions(req: InterviewRequest):
+    try:
+        from modules.resume_tailor import generate_interview_questions
+        result = generate_interview_questions(req.job_title, req.job_description, req.candidate_skills)
+        return result
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/certifications")
+def api_certifications(req: CertificationRequest):
+    try:
+        from modules.resume_tailor import suggest_certifications
+        result = suggest_certifications(req.missing_skills, req.job_title)
+        return result
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
