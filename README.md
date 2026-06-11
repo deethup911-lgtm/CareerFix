@@ -1,18 +1,19 @@
 # CareerFix — AI-Powered ATS Resume & Job Matching Engine
 
-CareerFix is a full-stack AI-powered Applicant Tracking System (ATS) simulator and job recommendation engine. It analyzes your resume, matches it against live job postings from multiple boards, gives semantic skill matching scores, and uses Google Gemini to coach you on how to beat the ATS for each specific role.
+CareerFix is a full-stack AI-powered Applicant Tracking System (ATS) simulator and job recommendation engine. It analyzes your resume, matches it against live job postings from multiple boards, gives semantic skill matching scores, and uses local AI (Ollama) to coach you on how to beat the ATS for each specific role.
 
 ---
 
 ## Features
 
-- **AI Resume Analysis** — Upload a PDF or paste text. Gemini extracts skills, experience level, projects, and education.
-- **Offline Fallback Mode** — If Gemini API quota is exhausted, a local 488-skill taxonomy dictionary provides instant offline parsing.
+- **AI Resume Analysis** — Upload a PDF or paste text. Local AI extracts skills, experience level, contact info, projects, and education.
+- **Offline Fallback Mode** — If the AI is unavailable, a local 488-skill taxonomy dictionary provides instant offline parsing.
 - **Multi-Board Job Search** — Simultaneously fetches from Adzuna, Remotive, and JSearch (Google Jobs) using parallel threads.
 - **Semantic Skill Matching** — Uses ChromaDB + `all-MiniLM-L6-v2` to detect synonym matches (e.g. "Neural Networks" ↔ "Deep Learning").
 - **ATS Score Simulator** — Simulates how a corporate ATS software would score your resume against a job: keyword density, section detection, formatting checks, length analysis.
-- **AI Resume Tips** — Gemini 2.0 Flash generates custom summary rewrites and bullet point fixes for each specific job.
-- **Interview Question Generator** — 5 targeted interview questions per job (mix of technical + behavioral).
+- **AI Resume Tips & Tailoring** — Ollama generates custom summary rewrites and bullet point fixes for each specific job.
+- **Tailored Resume PDF Export** — Merge your original contact info and education with AI-tailored summaries and bullet points into a clean, downloadable PDF.
+- **Interview Question Generator** — Generates targeted interview questions per job (mix of technical + behavioral).
 - **Job Freshness Filter** — Only shows jobs posted within the last 30 days.
 - **Smart Deduplication** — Removes duplicate jobs by title+company hash across all sources.
 - **Dynamic Autocomplete UI** — GeoDB Cities API for location autocomplete. Local suggestions for job titles.
@@ -26,9 +27,9 @@ CareerFix is a full-stack AI-powered Applicant Tracking System (ATS) simulator a
 |---|---|
 | Frontend | React.js (Vite), Vanilla CSS |
 | Backend | FastAPI (Python), Uvicorn |
-| AI Models | Google Gemini 2.0 Flash, Sentence Transformers (`all-MiniLM-L6-v2`) |
+| AI Models | Ollama (`qwen2.5:3b` default), Sentence Transformers (`all-MiniLM-L6-v2`) |
 | Vector DB | ChromaDB (in-memory) |
-| Resume Parsing | PyPDF2, PyMuPDF |
+| Resume Parsing | PyMuPDF (fitz), python-docx |
 | Job APIs | Adzuna, Remotive, JSearch (RapidAPI) |
 | Location API | GeoDB Cities (RapidAPI) |
 
@@ -43,18 +44,19 @@ CareerFix/
 ├── .env                           # API keys (DO NOT COMMIT)
 │
 ├── modules/
+│   ├── ollama_client.py           # Interface with local Ollama instance
 │   ├── resume_parser.py           # PDF/DOCX text extraction
-│   ├── resume_analyzer.py         # Gemini skill + experience extraction
-│   ├── role_recommender.py        # Local + Gemini role recommendations
+│   ├── resume_analyzer.py         # AI skill, experience, and contact extraction
+│   ├── role_recommender.py        # Local + AI role recommendations
 │   ├── job_search.py              # Multi-API parallel job fetcher
 │   ├── job_filter.py              # Seniority + experience level filter
 │   ├── matcher.py                 # ChromaDB + semantic scoring engine
 │   ├── ats_simulator.py           # ATS score simulation (offline)
-│   ├── resume_tailor.py           # Gemini resume tips + interview Q + certs
+│   ├── resume_tailor.py           # AI resume tips + interview Q + certs
 │   ├── skill_extractor.py         # Local skill parsing from tech_skills.txt
 │   ├── experience_extractor.py    # Regex-based experience year extractor
 │   ├── skill_gap.py               # Cross-job skill gap aggregation
-│   ├── pdf_generator.py           # Resume PDF export
+│   ├── pdf_generator.py           # Tailored Resume PDF export
 │   └── utils.py                   # Shared helpers
 │
 ├── data/
@@ -80,16 +82,32 @@ git clone https://github.com/your-username/CareerFix.git
 cd CareerFix
 ```
 
-### 2. Install Python Dependencies
+### 2. Install Dependencies
+**Backend:**
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Configure API Keys
+**Frontend:**
+```bash
+cd frontend
+npm install
+```
+
+### 3. Setup Local AI (Ollama)
+Download and install [Ollama](https://ollama.com/). Then, pull the default testing model (or configure your own):
+```bash
+ollama run qwen2.5:3b
+```
+
+### 4. Configure API Keys
 
 Create a `.env` file in the root directory:
 ```env
-GEMINI_API_KEY=your_google_gemini_api_key
+# Optional: Set your preferred Ollama model (default is qwen2.5:3b)
+OLLAMA_MODEL=qwen2.5:3b
+
+# Job Board APIs
 ADZUNA_APP_ID=your_adzuna_app_id
 ADZUNA_API_KEY=your_adzuna_api_key
 RAPIDAPI_KEY=your_rapidapi_key
@@ -98,22 +116,22 @@ RAPIDAPI_KEY=your_rapidapi_key
 #### Getting API Keys:
 | API | Link | Cost |
 |---|---|---|
-| **Gemini API** | [aistudio.google.com](https://aistudio.google.com/app/apikey) | Free (1500 req/day) |
 | **Adzuna** | [developer.adzuna.com](https://developer.adzuna.com/) | Free |
 | **RapidAPI** (JSearch + GeoDB) | [rapidapi.com](https://rapidapi.com/) | Free tier available |
 
 > **Note:** JSearch and GeoDB Cities both use the same `RAPIDAPI_KEY`. Subscribe to both on RapidAPI with one account.
 
-### 4. Start the Backend
+### 5. Start the Services
+
+**Start the Backend:**
 ```bash
 uvicorn main:app --reload
 ```
 Backend runs on `http://localhost:8000`
 
-### 5. Start the Frontend
+**Start the Frontend:**
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
 Frontend runs on `http://localhost:5173`
@@ -124,40 +142,15 @@ Frontend runs on `http://localhost:5173`
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/analyze-resume` | Upload PDF or paste resume text |
+| `POST` | `/api/analyze-resume` | Upload PDF or paste resume text to extract skills & contact info |
 | `POST` | `/api/search-jobs` | Fetch live jobs from all boards |
-| `POST` | `/api/match-jobs` | Run semantic ATS matching |
-| `POST` | `/api/get-resume-suggestions` | AI-tailored resume tips |
-| `POST` | `/api/ats-score` | ATS simulation score |
-| `POST` | `/api/interview-questions` | Generate 5 interview questions |
+| `POST` | `/api/match-jobs` | Run semantic ATS matching via ChromaDB |
+| `POST` | `/api/get-resume-suggestions` | AI-tailored resume tips and rewriting |
+| `POST` | `/api/download-resume-pdf` | Download the AI-tailored resume as a PDF document |
+| `POST` | `/api/ats-score` | ATS simulation score based on keyword/format analysis |
+| `POST` | `/api/interview-questions` | Generate 5 targeted interview questions |
+| `POST` | `/api/certifications` | Recommend certifications to close skill gaps |
 | `GET` | `/api/locations/autocomplete?q=` | City autocomplete via GeoDB |
-
----
-
-## How It Works
-
-```
-1. Upload Resume (PDF or text)
-          ↓
-2. Gemini 2.0 Flash extracts skills, experience, domain
-   [Fallback: local 488-skill dictionary]
-          ↓
-3. Role Recommender suggests appropriate job titles based on your experience level
-          ↓
-4. User clicks Search → 3 Job APIs queried in parallel threads
-   (Adzuna + Remotive + JSearch/Google Jobs)
-          ↓
-5. Jobs filtered: freshness (30 days), deduplication, job type
-          ↓
-6. ChromaDB embeds candidate skills into vector space
-   Sentence Transformers batch-encode all job descriptions
-          ↓
-7. Semantic Match Score = Skill Match (40%) + Exp Fit (30%) + Semantic Sim (30%)
-          ↓
-8. Top matches displayed with job type and date badges
-          ↓
-9. Per job: ATS Score | AI Resume Tips | Interview Questions
-```
 
 ---
 
@@ -165,11 +158,8 @@ Frontend runs on `http://localhost:5173`
 
 | Error | Cause | Fix |
 |---|---|---|
-| `Gemini 429 RESOURCE_EXHAUSTED` | Daily quota hit | Wait until midnight or use a different Google account key |
+| `Ollama connection refused` | Ollama isn't running | Ensure the Ollama app is running in the background |
 | `JSearch 429 Too Many Requests` | Rate limit from parallel threads | Reduce job titles / locations in search |
 | `Adzuna 429` | Free tier limit | System auto-retries with 3 attempts + jitter |
 | `chromadb not installed` | Wrong Python env | Run `python -m pip install chromadb` in the same terminal as uvicorn |
 | `Loading... stuck on location` | GeoDB rate limited | Built-in 400ms debounce protects quota; wait a moment |
-
----
-
