@@ -2,7 +2,7 @@ import os
 import chromadb
 import uuid
 import requests
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
@@ -45,6 +45,7 @@ class GenerateResumeRequest(BaseModel):
     company: str
     matched_skills: List[str]
     missing_skills: List[str]
+    is_top_3: bool = False
 
 @app.post("/api/analyze-resume")
 def api_analyze_resume(
@@ -164,7 +165,8 @@ def api_get_resume_suggestions(req: GenerateResumeRequest):
             resume_text_representation, 
             req.job_description,
             req.matched_skills,
-            req.missing_skills
+            req.missing_skills,
+            generate_full_resume=req.is_top_3
         )
         
         return tailored_data
@@ -211,6 +213,26 @@ def api_certifications(req: CertificationRequest):
         from modules.resume_tailor import suggest_certifications
         result = suggest_certifications(req.missing_skills, req.job_title)
         return result
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+class DownloadPDFRequest(BaseModel):
+    resume_analysis: dict
+    tailored_data: dict
+    job_title: str
+    company: str
+
+@app.post("/api/download-resume-pdf")
+def api_download_resume_pdf(req: DownloadPDFRequest):
+    try:
+        pdf_bytes = generate_resume_pdf(
+            analysis=req.resume_analysis,
+            tailored_data=req.tailored_data,
+            job_title=req.job_title,
+            company=req.company
+        )
+        return Response(content=pdf_bytes, media_type="application/pdf")
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

@@ -19,9 +19,22 @@ def generate_resume_pdf(analysis: dict, tailored_data: dict, job_title: str, com
     # Colors (Dark grey for text, Green for accents)
     pdf.set_text_color(50, 50, 50)
     
-    # Title / Name (Placeholder)
+    # Contact Info
+    contact = analysis.get("contact_info", {})
+    name = contact.get("name") or "Candidate Name"
+    email = contact.get("email", "")
+    phone = contact.get("phone", "")
+    linkedin = contact.get("linkedin", "")
+    
+    contact_str = " | ".join(filter(None, [email, phone, linkedin]))
+    
+    # Title / Name
     pdf.set_font("helvetica", "B", 24)
-    pdf.cell(0, 10, "Candidate Name", ln=True, align="C")
+    pdf.cell(0, 10, name, ln=True, align="C")
+    
+    if contact_str:
+        pdf.set_font("helvetica", "", 10)
+        pdf.cell(0, 6, contact_str, ln=True, align="C")
     
     # Subtitle
     pdf.set_font("helvetica", "", 12)
@@ -35,7 +48,7 @@ def generate_resume_pdf(analysis: dict, tailored_data: dict, job_title: str, com
     pdf.cell(0, 8, "Professional Summary", ln=True)
     pdf.set_font("helvetica", "", 11)
     
-    summary_text = tailored_data.get("summary_suggestion", analysis.get("summary", ""))
+    summary_text = tailored_data.get("tailored_summary") or tailored_data.get("summary_suggestion") or analysis.get("summary", "")
     # Remove markdown bold if any
     summary_text = summary_text.replace("**", "")
     pdf.multi_cell(0, 6, summary_text)
@@ -46,9 +59,9 @@ def generate_resume_pdf(analysis: dict, tailored_data: dict, job_title: str, com
     pdf.cell(0, 8, "Core Skills", ln=True)
     pdf.set_font("helvetica", "", 11)
     
-    # Combine original and new ATS keywords
-    skills = analysis.get("skills", [])
-    new_skills = tailored_data.get("ats_keywords_to_add", [])
+    # Combine original and new ATS keywords/updated skills
+    skills = tailored_data.get("updated_skills") or analysis.get("skills", [])
+    new_skills = tailored_data.get("ats_keywords_to_add") or tailored_data.get("ats_keywords_added") or []
     all_skills = list(set(skills + new_skills))
     
     skills_str = ", ".join(all_skills)
@@ -61,7 +74,7 @@ def generate_resume_pdf(analysis: dict, tailored_data: dict, job_title: str, com
     pdf.set_font("helvetica", "", 11)
     
     projects = analysis.get("projects", [])
-    project_suggestions = tailored_data.get("project_bullet_suggestions", [])
+    project_suggestions = tailored_data.get("tailored_experience") or tailored_data.get("project_bullet_suggestions", [])
     
     # Just print the tailored suggestions if available, else original
     if project_suggestions:

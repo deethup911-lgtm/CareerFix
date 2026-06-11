@@ -1,64 +1,75 @@
 import json
-from .utils import get_env_var
-try:
-    from google import genai
-except ImportError:
-    genai = None
+from .ollama_client import generate_content
 
-MODEL = "gemini-2.0-flash"
-
-def _get_client():
-    api_key = get_env_var("GEMINI_API_KEY")
-    if not api_key or not genai:
-        return None
-    return genai.Client(api_key=api_key)
-
-def tailor_resume(resume_text, job_description, matched_skills, missing_skills):
-    client = _get_client()
-    if not client:
-        return {
-            "summary_suggestion": "Gemini API key missing. Cannot generate tailored summary.",
-            "project_bullet_suggestions": [],
-            "skills_section_suggestion": [],
-            "ats_keywords_to_add": [],
-            "warnings": ["Missing Gemini credentials."]
-        }
-        
+def tailor_resume(resume_text, job_description, matched_skills, missing_skills, generate_full_resume=False):
     try:
-        prompt = f"""
-        You are an expert career coach.
-        Analyze the candidate's resume and the target job description.
-        Provide highly specific, actionable advice on how to tweak their resume for this exact job.
-        
-        DO NOT fabricate experience. DO NOT add skills the user does not have.
-        
-        Return a JSON object:
-        {{
-          "summary_suggestion": "Rewrite the current summary to: '...'",
-          "project_bullet_suggestions": [
-             "Replace 'Did XYZ' with 'Achieved XYZ using [Skill] to improve [Metric]'",
-             "Add a bullet about your experience with [Keyword]"
-          ],
-          "skills_section_suggestion": ["Move [Skill] to the top of your skills list", "Group [Skill1] and [Skill2] under 'Frontend Development'"],
-          "ats_keywords_to_add": ["{', '.join(missing_skills)} (learn/add only if true)"],
-          "warnings": ["Any warnings about overclaiming"]
-        }}
-        
-        Resume:
-        {resume_text[:2000]}
-        
-        Job Description:
-        {job_description[:2000]}
-        """
-        
-        response = client.models.generate_content(
-            model=MODEL,
-            contents=prompt,
-            config=genai.types.GenerateContentConfig(
-                response_mime_type="application/json",
-            ),
-        )
-        return json.loads(response.text)
+        if generate_full_resume:
+            prompt = f"""
+            You are an expert resume writer.
+            Analyze the candidate's resume and the target job description.
+            REWRITE the resume content to perfectly match this specific job, while remaining truthful to their actual skills.
+            Do NOT fabricate experience or add skills they do not possess.
+            
+            Return a JSON object with a fully tailored resume section:
+            {{
+              "tailored_summary": "A powerful new professional summary rewritten for this role...",
+              "tailored_experience": [
+                 "Rewritten bullet point 1 highlighting relevant achievements",
+                 "Rewritten bullet point 2 emphasizing required skills"
+              ],
+              "updated_skills": ["Skill 1", "Skill 2"],
+              "ats_keywords_added": ["Keyword 1", "Keyword 2"],
+              "warnings": ["Any warnings about overclaiming"]
+            }}
+            
+            Resume:
+            {resume_text[:2000]}
+            
+            Job Description:
+            {job_description[:2000]}
+            """
+        else:
+            prompt = f"""
+            You are an expert career coach.
+            Analyze the candidate's resume and the target job description.
+            Provide highly specific, actionable advice on how to tweak their resume for this exact job.
+            
+            DO NOT fabricate experience. DO NOT add skills the user does not have.
+            
+            Return a JSON object:
+            {{
+              "summary_suggestion": "Replace this sentence with: '...'",
+              "project_bullet_suggestions": [
+                 "Replace 'Did XYZ' with 'Achieved XYZ using [Skill] to improve [Metric]'",
+                 "Add a bullet about your experience with [Keyword]"
+              ],
+              "skills_section_suggestion": ["Move [Skill] to the top of your skills list", "Group [Skill1] and [Skill2] under 'Frontend Development'"],
+              "ats_keywords_to_add": ["{', '.join(missing_skills)} (learn/add only if true)"],
+              "course_recommendations": [
+                 "If you did the 'Meta Front-End Developer' course on Coursera and have a certificate you might have a better chance at winning."
+              ],
+              "warnings": ["Any warnings about overclaiming"]
+            }}
+            
+            Resume:
+            {resume_text[:2000]}
+            
+            Job Description:
+            {job_description[:2000]}
+            """
+            
+        result = generate_content(prompt, json_mode=True)
+        if result:
+            return result
+        else:
+            return {
+                "summary_suggestion": "Error generating suggestions.",
+                "project_bullet_suggestions": [],
+                "skills_section_suggestion": [],
+                "ats_keywords_to_add": [],
+                "course_recommendations": [],
+                "warnings": ["Failed to communicate with local AI."]
+            }
     except Exception as e:
         print(f"Error tailoring resume: {e}")
         return {
@@ -66,14 +77,11 @@ def tailor_resume(resume_text, job_description, matched_skills, missing_skills):
             "project_bullet_suggestions": [],
             "skills_section_suggestion": [],
             "ats_keywords_to_add": [],
+            "course_recommendations": [],
             "warnings": [str(e)]
         }
 
 def generate_interview_questions(job_title, job_description, candidate_skills):
-    client = _get_client()
-    if not client:
-        return {"questions": ["Gemini unavailable. Please try again later."]}
-
     try:
         prompt = f"""
         You are a senior hiring manager preparing for an interview.
@@ -92,27 +100,21 @@ def generate_interview_questions(job_title, job_description, candidate_skills):
           ]
         }}
         """
-        response = client.models.generate_content(
-            model=MODEL,
-            contents=prompt,
-            config=genai.types.GenerateContentConfig(response_mime_type="application/json"),
-        )
-        return json.loads(response.text)
+        result = generate_content(prompt, json_mode=True)
+        if result:
+            return result
+        return {"questions": [{"question": "Error generating questions", "type": "Error", "tip": ""}]}
     except Exception as e:
         print(f"Error generating interview questions: {e}")
         return {"questions": [{"question": f"Error: {e}", "type": "Error", "tip": ""}]}
 
 def suggest_certifications(missing_skills, job_title):
-    client = _get_client()
-    if not client:
-        return {"certifications": []}
-
     try:
         prompt = f"""
         You are a career development advisor.
-        Based on the missing skills for this job, recommend the top 3-5 specific certifications 
+        Based on the missing skills for this job, recommend the top 3-5 specific certifications or courses 
         that would directly close the skill gaps and make the candidate more competitive.
-        Only recommend real, widely-recognized certifications.
+        Provide suggestions for popular sites like Coursera, Udemy, edX, or official providers.
         
         Job Title: {job_title}
         Missing Skills: {', '.join(missing_skills[:15])}
@@ -122,7 +124,7 @@ def suggest_certifications(missing_skills, job_title):
           "certifications": [
             {{
               "name": "AWS Certified Solutions Architect",
-              "provider": "Amazon",
+              "provider": "Amazon / Coursera",
               "skill_addressed": "AWS",
               "url": "https://aws.amazon.com/certification/",
               "duration": "3-6 months",
@@ -131,12 +133,10 @@ def suggest_certifications(missing_skills, job_title):
           ]
         }}
         """
-        response = client.models.generate_content(
-            model=MODEL,
-            contents=prompt,
-            config=genai.types.GenerateContentConfig(response_mime_type="application/json"),
-        )
-        return json.loads(response.text)
+        result = generate_content(prompt, json_mode=True)
+        if result:
+            return result
+        return {"certifications": []}
     except Exception as e:
         print(f"Error suggesting certifications: {e}")
         return {"certifications": []}

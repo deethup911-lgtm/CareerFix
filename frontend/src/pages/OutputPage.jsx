@@ -12,12 +12,21 @@ export default function OutputPage({
   setMatchedJobs 
 }) {
   
-  const initialRoles = recommendedRoles?.length > 0 ? recommendedRoles.map(r => r.role) : [""];
-  const [jobTitles, setJobTitles] = useState(initialRoles);
+  const safeRoles = Array.isArray(recommendedRoles) ? recommendedRoles : (recommendedRoles?.roles || []);
+  const topRoles = safeRoles.slice(0, 5);
+  const initialRole = topRoles.length > 0 ? (topRoles[0].role || topRoles[0]) : "";
+  const [jobTitles, setJobTitles] = useState([initialRole]);
   const [locations, setLocations] = useState(["Remote", "India"]);
   const [jobTypeFilter, setJobTypeFilter] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState(null);
+
+  React.useEffect(() => {
+    if (jobTitles.length === 1 && jobTitles[0] === "" && topRoles.length > 0) {
+      setJobTitles([topRoles[0].role || topRoles[0]]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(topRoles)]);
   
   const [suggestionLoading, setSuggestionLoading] = useState({});
   const [suggestions, setSuggestions] = useState({});
@@ -47,6 +56,18 @@ export default function OutputPage({
   };
 
   const handleSearch = async () => {
+    const activeRoles = jobTitles.map(s => (s?.title || s || "").toString().trim()).filter(Boolean);
+    const activeLocations = locations.map(s => (s || "").toString().trim()).filter(Boolean);
+    
+    if (activeRoles.length === 0) {
+      setError("Please enter at least one Job Title to search.");
+      return;
+    }
+    if (activeLocations.length === 0) {
+      setError("Please enter at least one Location to search.");
+      return;
+    }
+
     setIsSearching(true);
     setError(null);
     setJobs([]);
@@ -61,8 +82,8 @@ export default function OutputPage({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          roles: jobTitles.map(s => s.trim()).filter(Boolean),
-          locations: locations.map(s => s.trim()).filter(Boolean),
+          roles: activeRoles,
+          locations: activeLocations,
           job_type: jobTypeFilter || null
         })
       });
@@ -107,7 +128,8 @@ export default function OutputPage({
           job_title: job.title,
           company: job.company,
           matched_skills: matchData.matched_skills || [],
-          missing_skills: matchData.missing_skills || []
+          missing_skills: matchData.missing_skills || [],
+          is_top_3: idx < 3
         })
       });
       const data = await res.json();
@@ -178,6 +200,38 @@ export default function OutputPage({
       alert("Certifications failed: " + err.message);
     } finally {
       setCertLoading(prev => ({ ...prev, [idx]: false }));
+    }
+  };
+
+  const handleDownloadPDF = async (job, matchData, idx) => {
+    try {
+      const tailored_data = suggestions[idx];
+      if (!tailored_data) return;
+      
+      const res = await fetch("http://localhost:8000/api/download-resume-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resume_analysis: resumeAnalysis,
+          tailored_data: tailored_data,
+          job_title: job.title,
+          company: job.company
+        })
+      });
+      
+      if (!res.ok) throw new Error("Failed to generate PDF");
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Tailored_Resume_${job.company.replace(/\s+/g, '_')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      alert("Failed to download PDF: " + err.message);
     }
   };
 
@@ -254,7 +308,7 @@ export default function OutputPage({
                   value={title} 
                   placeholder="e.g. AI Engineer"
                   mode="local"
-                  localSuggestions={recommendedRoles?.map(r => r.role) || []}
+                  localSuggestions={safeRoles.map(r => r.role || r) || []}
                   onChange={val => handleUpdateArray(setJobTitles, jobTitles, idx, val)} 
                 />
                 <button 
@@ -265,6 +319,40 @@ export default function OutputPage({
                 </button>
               </div>
             ))}
+            {topRoles.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>AI Suggestions:</span>
+                {topRoles.map((r, i) => {
+                  const roleName = r.role || r;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        if (jobTitles.length === 1 && jobTitles[0] === "") {
+                          setJobTitles([roleName]);
+                        } else if (!jobTitles.includes(roleName)) {
+                          setJobTitles([...jobTitles, roleName]);
+                        }
+                      }}
+                      style={{
+                        fontSize: '0.75rem',
+                        padding: '0.2rem 0.6rem',
+                        borderRadius: '999px',
+                        background: 'rgba(37, 99, 235, 0.1)',
+                        color: '#2563eb',
+                        border: '1px solid rgba(37, 99, 235, 0.2)',
+                        cursor: 'pointer',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseOver={e => e.target.style.background = 'rgba(37, 99, 235, 0.2)'}
+                      onMouseOut={e => e.target.style.background = 'rgba(37, 99, 235, 0.1)'}
+                    >
+                      + {roleName}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
           
           <div className="input-group">
@@ -539,36 +627,93 @@ export default function OutputPage({
                 {/* AI Resume Suggestions Panel */}
                 {suggestions[idx] && (
                   <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: 'var(--light-green)', borderRadius: 'var(--radius-sm)' }}>
-                    <h4 style={{ color: 'var(--primary-green)', marginBottom: '1rem' }}>Tailoring Suggestions for this Role</h4>
+                    <h4 style={{ color: 'var(--primary-green)', marginBottom: '1rem' }}>
+                      {idx < 3 ? "✨ Fully Tailored Resume" : "Tailoring Suggestions for this Role"}
+                    </h4>
                     
-                    <div style={{ marginBottom: '1rem' }}>
-                      <strong>Summary Rewrite:</strong>
-                      <p style={{ margin: '0.25rem 0 0 0', fontStyle: 'italic' }}>{suggestions[idx].summary_suggestion}</p>
-                    </div>
-                    
-                    <div style={{ marginBottom: '1rem' }}>
-                      <strong>Project Bullet Fixes:</strong>
-                      <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.5rem' }}>
-                        {suggestions[idx].project_bullet_suggestions?.map((b, i) => (
-                          <li key={i}>{b}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    
-                    <div style={{ marginBottom: '1rem' }}>
-                      <strong>Skills Formatting:</strong>
-                      <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.5rem' }}>
-                        {suggestions[idx].skills_section_suggestion?.map((s, i) => (
-                          <li key={i}>{s}</li>
-                        ))}
-                      </ul>
-                    </div>
+                    {suggestions[idx].tailored_summary ? (
+                      <>
+                        <div style={{ marginBottom: '1rem' }}>
+                          <strong>Tailored Summary:</strong>
+                          <p style={{ margin: '0.25rem 0 0 0', fontStyle: 'italic' }}>{suggestions[idx].tailored_summary}</p>
+                        </div>
+                        <div style={{ marginBottom: '1rem' }}>
+                          <strong>Tailored Experience:</strong>
+                          <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.5rem' }}>
+                            {suggestions[idx].tailored_experience?.map((b, i) => (
+                              <li key={i}>{b}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div style={{ marginBottom: '1rem' }}>
+                          <strong>Updated Skills:</strong>
+                          <p style={{ margin: '0.25rem 0 0 0' }}>{suggestions[idx].updated_skills?.join(", ")}</p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ marginBottom: '1rem' }}>
+                          <strong>Summary Rewrite:</strong>
+                          <p style={{ margin: '0.25rem 0 0 0', fontStyle: 'italic' }}>{suggestions[idx].summary_suggestion}</p>
+                        </div>
+                        
+                        <div style={{ marginBottom: '1rem' }}>
+                          <strong>Project Bullet Fixes:</strong>
+                          <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.5rem' }}>
+                            {suggestions[idx].project_bullet_suggestions?.map((b, i) => (
+                              <li key={i}>{b}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        
+                        <div style={{ marginBottom: '1rem' }}>
+                          <strong>Skills Formatting:</strong>
+                          <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.5rem' }}>
+                            {suggestions[idx].skills_section_suggestion?.map((s, i) => (
+                              <li key={i}>{s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        
+                        {suggestions[idx].course_recommendations?.length > 0 && (
+                          <div style={{ marginBottom: '1rem' }}>
+                            <strong>Course Recommendations:</strong>
+                            <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.5rem', color: '#0891b2' }}>
+                              {suggestions[idx].course_recommendations.map((c, i) => (
+                                <li key={i}>{c}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </>
+                    )}
                     
                     <div>
                       <strong>Missing ATS Keywords (Add if true):</strong>
                       <p style={{ margin: '0.25rem 0 0 0', color: '#dc2626' }}>
                         {suggestions[idx].ats_keywords_to_add?.join(", ")}
                       </p>
+                    </div>
+
+                    {/* Download PDF Button */}
+                    <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(22, 163, 74, 0.2)' }}>
+                      <button 
+                        onClick={() => handleDownloadPDF(m.job, m.match_data, idx)}
+                        style={{ 
+                          padding: '0.5rem 1rem', 
+                          background: 'var(--primary-green)', 
+                          color: 'white', 
+                          border: 'none', 
+                          borderRadius: '4px', 
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        📄 Download Tailored Resume (PDF)
+                      </button>
                     </div>
                   </div>
                 )}

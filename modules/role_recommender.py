@@ -1,9 +1,6 @@
 import json
 from .utils import get_env_var
-try:
-    from google import genai
-except ImportError:
-    genai = None
+from .ollama_client import generate_content
 
 TECH_CATEGORIES = [
     {
@@ -148,41 +145,43 @@ def recommend_roles(resume_analysis):
         if len(local_roles) >= 5:
             break
 
-    # 2. Try Gemini to refine
-    api_key = get_env_var("GEMINI_API_KEY")
-    if api_key and genai:
-        try:
-            client = genai.Client(api_key=api_key)
-            prompt = f"""
-            Based ONLY on the following skills extracted from a resume: {', '.join(skills)}.
-            The candidate's experience level is: {experience_level}.
+    # 2. Try Ollama to refine
+    try:
+        prompt = f"""
+        Based ONLY on the following skills extracted from a resume: {', '.join(skills)}.
+        The candidate's experience level is: {experience_level}.
+        
+        {'Since the candidate is a Fresher or Junior, ONLY recommend entry-level and junior job titles. Use prefixes like Junior, Jr., Associate, Entry Level, or Trainee. Do NOT suggest mid-level or senior roles.' if is_junior else 'Recommend standard job roles suitable for their experience level.'}
+        You MUST recommend exactly 5 job roles.
+        
+        Do not mention any skill in the reason that is not present in the extracted skills list.
+        Projects: {resume_analysis.get('projects', [])}
+        
+        Return a JSON array of objects exactly like this, with no wrapper objects:
+        [
+          {{
+            "role": "Job Title",
+            "reason": "Brief reason based on matched skills",
+            "source": "Ollama"
+          }}
+        ]
+        """
+        ollama_roles = generate_content(prompt, json_mode=True)
+        if ollama_roles:
+            # Handle if Ollama wrapped it in a dict
+            if isinstance(ollama_roles, dict):
+                for key in ["roles", "job_roles", "recommendations", "job_titles", "data"]:
+                    if key in ollama_roles and isinstance(ollama_roles[key], list):
+                        ollama_roles = ollama_roles[key]
+                        break
             
-            {'Since the candidate is a Fresher or Junior, ONLY recommend entry-level and junior job titles. Use prefixes like Junior, Jr., Associate, Entry Level, or Trainee. Do NOT suggest mid-level or senior roles.' if is_junior else 'Recommend 3-5 standard job roles suitable for their experience level.'}
-            
-            Do not mention any skill in the reason that is not present in the extracted skills list.
-            Projects: {resume_analysis.get('projects', [])}
-            
-            Return a JSON array of objects:
-            [
-              {{
-                "role": "Job Title",
-                "reason": "Brief reason based on matched skills",
-                "source": "Gemini"
-              }}
-            ]
-            """
-            response = client.models.generate_content(
-                model='gemini-2.0-flash',
-                contents=prompt,
-                config=genai.types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                ),
-            )
-            gemini_roles = json.loads(response.text)
-            if gemini_roles:
-                return gemini_roles
-        except Exception as e:
-            print(f"Gemini role recommendation failed: {e}")
-            resume_analysis["error_log"].append(f"Gemini role recommendation failed: {e}")
+            if isinstance(ollama_roles, list) and len(ollama_roles) > 0:
+                # Ensure each item has 'role'
+                valid_roles = [r for r in ollama_roles if isinstance(r, dict) and "role" in r]
+                if valid_roles:
+                    return valid_roles
+    except Exception as e:
+        print(f"Ollama role recommendation failed: {e}")
+        resume_analysis["error_log"].append(f"Ollama role recommendation failed: {e}")
             
     return local_roles

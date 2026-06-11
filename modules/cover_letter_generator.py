@@ -1,16 +1,8 @@
 from .utils import get_env_var
-try:
-    from google import genai
-except ImportError:
-    genai = None
+from .ollama_client import generate_content
 
 def generate_cover_letter(candidate_summary, resume_skills, job_title, company, job_description, is_fresher=False):
-    api_key = get_env_var("GEMINI_API_KEY")
-    if not api_key or not genai:
-        return "Gemini API key missing. Cannot generate cover letter."
-        
     try:
-        client = genai.Client(api_key=api_key)
         fresher_note = "The candidate is a fresher/recent graduate. Focus on their projects, internship, and eagerness to learn." if is_fresher else "Focus on their proven experience."
         
         prompt = f"""
@@ -26,11 +18,8 @@ def generate_cover_letter(candidate_summary, resume_skills, job_title, company, 
         Return ONLY the cover letter text, no markdown blocks.
         """
         
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-        )
-        return response.text.strip()
+        result = generate_content(prompt, json_mode=False)
+        return result.strip() if result else "Failed to generate cover letter."
     except Exception as e:
         print(f"Error generating cover letter: {e}")
         return "Failed to generate cover letter."
