@@ -63,7 +63,12 @@ def analyze_resume(resume_text):
         prompt = f"""
         Analyze the following resume text.
         Extract any major projects, a professional summary, the education background, a general domain hint (e.g., AI/ML, Full Stack, HR, Marketing), and contact information.
-        IMPORTANT: Do not hallucinate skills. Only return skills that are clearly mentioned in the text.
+        
+        IMPORTANT GUIDELINES:
+        1. Do not hallucinate skills. Only return skills that are clearly mentioned in the text.
+        2. For `experience_years`, ONLY count full-time, professional employment. DO NOT count university degrees, academic projects, hackathons, or student club leadership as years of experience. Short internships (e.g., 3 weeks) do NOT count as full years. If the candidate is a student or recent graduate without long-term employment, experience_years MUST be 0.
+        3. For `experience_level`, use "Fresher" if experience_years is 0, "Junior" if 1-2, "Mid-Level" if 3-5, or "Senior" if 6+.
+        
         Return a JSON object with this structure:
         {{
             "skills": ["List of ONLY skills present in the resume text"],

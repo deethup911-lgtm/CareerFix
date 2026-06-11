@@ -2,8 +2,9 @@ import pytest
 from modules.resume_analyzer import analyze_resume
 
 def test_local_fallback_analyzer(monkeypatch):
-    # Simulate no Gemini key
-    monkeypatch.setenv("GEMINI_API_KEY", "")
+    # Mock generate_content to simulate local fallback/failure
+    import modules.resume_analyzer
+    monkeypatch.setattr(modules.resume_analyzer, "generate_content", lambda *args, **kwargs: None)
     
     resume_text = "I am a fresher. I know Python and Java."
     analysis = analyze_resume(resume_text)

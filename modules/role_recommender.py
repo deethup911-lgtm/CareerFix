@@ -112,6 +112,7 @@ def recommend_roles(resume_analysis):
             category_scores.append({
                 "name": cat["name"],
                 "roles": cat["roles"],
+                "junior_roles": cat.get("junior_roles", []),
                 "matched_skills": matched,
                 "score": len(matched)
             })

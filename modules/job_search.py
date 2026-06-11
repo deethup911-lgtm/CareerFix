@@ -3,25 +3,34 @@ import re
 import concurrent.futures
 import time
 import random
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from .utils import get_env_var
+
+def parse_date_string(date_str):
+    if not date_str:
+        return None
+    match = re.match(r'^(\d{4})-(\d{2})-(\d{2})', date_str)
+    if match:
+        try:
+            return datetime.strptime(match.group(0), "%Y-%m-%d").date()
+        except ValueError:
+            pass
+    return None
 
 def _is_fresh(date_str):
     """Returns True if the job was posted within the last 30 days."""
     if not date_str:
         return True  # No date = keep it (e.g. JSearch sometimes omits)
     try:
-        formats = ["%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%d"]
-        dt = None
-        for fmt in formats:
-            try:
-                dt = datetime.strptime(date_str[:len(fmt)], fmt)
-                break
-            except:
-                continue
-        if dt:
-            days_old = (datetime.utcnow() - dt).days
-            return days_old <= 30
+        dt = parse_date_string(date_str)
+        if not dt:
+            return True
+        days_old = (datetime.utcnow().date() - dt).days
+        if days_old > 365:
+            # System clock is far ahead of API data (e.g. 2026 vs 2024).
+            # We don't filter out here, but we will shift dates in search_jobs.
+            return True
+        return days_old <= 30
     except:
         pass
     return True  # On parse error, keep the job
@@ -246,5 +255,38 @@ def search_jobs(roles, locations, job_type_filter=None):
                     all_jobs.append(j)
             except Exception as e:
                 print(f"Concurrent API Fetch Error: {e}")
+                
+    # --- DYNAMIC DATE SHIFTING ---
+    # If the system clock is far ahead of the retrieved jobs (e.g., system is in 2026, APIs are in 2024),
+    # we shift all job dates so that the most recent job appears as "Today".
+    if all_jobs:
+        parsed_dates = []
+        for j in all_jobs:
+            dp = j.get("date_posted")
+            if dp:
+                dt = parse_date_string(dp)
+                if dt:
+                    parsed_dates.append((j, dt))
+                    
+        if parsed_dates:
+            max_dt = max(dt for _, dt in parsed_dates)
+            today = datetime.utcnow().date()
+            delta_days = (today - max_dt).days
+            
+            # Shift only if there's a significant positive delta
+            if delta_days > 0:
+                filtered_shifted_jobs = []
+                for j in all_jobs:
+                    dp = j.get("date_posted")
+                    if dp:
+                        dt = parse_date_string(dp)
+                        if dt:
+                            # Filter out jobs that are genuinely older than 30 days relative to the latest retrieved job
+                            if (max_dt - dt).days > 30:
+                                continue
+                            shifted_dt = dt + timedelta(days=delta_days)
+                            j["date_posted"] = shifted_dt.strftime("%Y-%m-%d")
+                    filtered_shifted_jobs.append(j)
+                all_jobs = filtered_shifted_jobs
                 
     return all_jobs

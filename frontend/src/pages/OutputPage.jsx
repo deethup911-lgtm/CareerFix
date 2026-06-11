@@ -128,8 +128,7 @@ export default function OutputPage({
           job_title: job.title,
           company: job.company,
           matched_skills: matchData.matched_skills || [],
-          missing_skills: matchData.missing_skills || [],
-          is_top_3: idx < 3
+          missing_skills: matchData.missing_skills || []
         })
       });
       const data = await res.json();
@@ -200,38 +199,6 @@ export default function OutputPage({
       alert("Certifications failed: " + err.message);
     } finally {
       setCertLoading(prev => ({ ...prev, [idx]: false }));
-    }
-  };
-
-  const handleDownloadPDF = async (job, matchData, idx) => {
-    try {
-      const tailored_data = suggestions[idx];
-      if (!tailored_data) return;
-      
-      const res = await fetch("http://localhost:8000/api/download-resume-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          resume_analysis: resumeAnalysis,
-          tailored_data: tailored_data,
-          job_title: job.title,
-          company: job.company
-        })
-      });
-      
-      if (!res.ok) throw new Error("Failed to generate PDF");
-      
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Tailored_Resume_${job.company.replace(/\s+/g, '_')}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (err) {
-      alert("Failed to download PDF: " + err.message);
     }
   };
 
@@ -465,6 +432,9 @@ export default function OutputPage({
                   <span className="badge badge-outline" style={{ borderColor: '#60a5fa', color: '#60a5fa' }}>
                     Exp Match: {m.match_data.experience_match}%
                   </span>
+                  <span className="badge badge-outline" style={{ borderColor: '#a855f7', color: '#a855f7' }}>
+                    Profile Match: {m.match_data.profile_match}%
+                  </span>
                 </div>
                 
                 {m.match_data.rejection_reasons && m.match_data.rejection_reasons.length > 0 && (
@@ -628,64 +598,41 @@ export default function OutputPage({
                 {suggestions[idx] && (
                   <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: 'var(--light-green)', borderRadius: 'var(--radius-sm)' }}>
                     <h4 style={{ color: 'var(--primary-green)', marginBottom: '1rem' }}>
-                      {idx < 3 ? "✨ Fully Tailored Resume" : "Tailoring Suggestions for this Role"}
+                      Tailoring Suggestions for this Role
                     </h4>
                     
-                    {suggestions[idx].tailored_summary ? (
-                      <>
-                        <div style={{ marginBottom: '1rem' }}>
-                          <strong>Tailored Summary:</strong>
-                          <p style={{ margin: '0.25rem 0 0 0', fontStyle: 'italic' }}>{suggestions[idx].tailored_summary}</p>
-                        </div>
-                        <div style={{ marginBottom: '1rem' }}>
-                          <strong>Tailored Experience:</strong>
-                          <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.5rem' }}>
-                            {suggestions[idx].tailored_experience?.map((b, i) => (
-                              <li key={i}>{b}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div style={{ marginBottom: '1rem' }}>
-                          <strong>Updated Skills:</strong>
-                          <p style={{ margin: '0.25rem 0 0 0' }}>{suggestions[idx].updated_skills?.join(", ")}</p>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ marginBottom: '1rem' }}>
-                          <strong>Summary Rewrite:</strong>
-                          <p style={{ margin: '0.25rem 0 0 0', fontStyle: 'italic' }}>{suggestions[idx].summary_suggestion}</p>
-                        </div>
-                        
-                        <div style={{ marginBottom: '1rem' }}>
-                          <strong>Project Bullet Fixes:</strong>
-                          <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.5rem' }}>
-                            {suggestions[idx].project_bullet_suggestions?.map((b, i) => (
-                              <li key={i}>{b}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        
-                        <div style={{ marginBottom: '1rem' }}>
-                          <strong>Skills Formatting:</strong>
-                          <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.5rem' }}>
-                            {suggestions[idx].skills_section_suggestion?.map((s, i) => (
-                              <li key={i}>{s}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        
-                        {suggestions[idx].course_recommendations?.length > 0 && (
-                          <div style={{ marginBottom: '1rem' }}>
-                            <strong>Course Recommendations:</strong>
-                            <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.5rem', color: '#0891b2' }}>
-                              {suggestions[idx].course_recommendations.map((c, i) => (
-                                <li key={i}>{c}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </>
+                    <div style={{ marginBottom: '1rem' }}>
+                      <strong>Summary Rewrite:</strong>
+                      <p style={{ margin: '0.25rem 0 0 0', fontStyle: 'italic' }}>{suggestions[idx].summary_suggestion}</p>
+                    </div>
+                    
+                    <div style={{ marginBottom: '1rem' }}>
+                      <strong>Project Bullet Fixes:</strong>
+                      <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.5rem' }}>
+                        {suggestions[idx].project_bullet_suggestions?.map((b, i) => (
+                          <li key={i}>{b}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    
+                    <div style={{ marginBottom: '1rem' }}>
+                      <strong>Skills Formatting:</strong>
+                      <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.5rem' }}>
+                        {suggestions[idx].skills_section_suggestion?.map((s, i) => (
+                          <li key={i}>{s}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    
+                    {suggestions[idx].course_recommendations?.length > 0 && (
+                      <div style={{ marginBottom: '1rem' }}>
+                        <strong>Course Recommendations:</strong>
+                        <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.5rem', color: '#0891b2' }}>
+                          {suggestions[idx].course_recommendations.map((c, i) => (
+                            <li key={i}>{c}</li>
+                          ))}
+                        </ul>
+                      </div>
                     )}
                     
                     <div>
@@ -693,27 +640,6 @@ export default function OutputPage({
                       <p style={{ margin: '0.25rem 0 0 0', color: '#dc2626' }}>
                         {suggestions[idx].ats_keywords_to_add?.join(", ")}
                       </p>
-                    </div>
-
-                    {/* Download PDF Button */}
-                    <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(22, 163, 74, 0.2)' }}>
-                      <button 
-                        onClick={() => handleDownloadPDF(m.job, m.match_data, idx)}
-                        style={{ 
-                          padding: '0.5rem 1rem', 
-                          background: 'var(--primary-green)', 
-                          color: 'white', 
-                          border: 'none', 
-                          borderRadius: '4px', 
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.5rem',
-                          fontWeight: 'bold'
-                        }}
-                      >
-                        📄 Download Tailored Resume (PDF)
-                      </button>
                     </div>
                   </div>
                 )}

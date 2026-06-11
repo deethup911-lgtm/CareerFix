@@ -1,62 +1,42 @@
 import json
 from .ollama_client import generate_content
 
-def tailor_resume(resume_text, job_description, matched_skills, missing_skills, generate_full_resume=False):
+def tailor_resume(resume_text, job_description, matched_skills, missing_skills):
     try:
-        if generate_full_resume:
-            prompt = f"""
-            You are an expert resume writer.
-            Analyze the candidate's resume and the target job description.
-            REWRITE the resume content to perfectly match this specific job, while remaining truthful to their actual skills.
-            Do NOT fabricate experience or add skills they do not possess.
-            
-            Return a JSON object with a fully tailored resume section:
-            {{
-              "tailored_summary": "A powerful new professional summary rewritten for this role...",
-              "tailored_experience": [
-                 "Rewritten bullet point 1 highlighting relevant achievements",
-                 "Rewritten bullet point 2 emphasizing required skills"
-              ],
-              "updated_skills": ["Skill 1", "Skill 2"],
-              "ats_keywords_added": ["Keyword 1", "Keyword 2"],
-              "warnings": ["Any warnings about overclaiming"]
-            }}
-            
-            Resume:
-            {resume_text[:2000]}
-            
-            Job Description:
-            {job_description[:2000]}
-            """
-        else:
-            prompt = f"""
-            You are an expert career coach.
-            Analyze the candidate's resume and the target job description.
-            Provide highly specific, actionable advice on how to tweak their resume for this exact job.
-            
-            DO NOT fabricate experience. DO NOT add skills the user does not have.
-            
-            Return a JSON object:
-            {{
-              "summary_suggestion": "Replace this sentence with: '...'",
-              "project_bullet_suggestions": [
-                 "Replace 'Did XYZ' with 'Achieved XYZ using [Skill] to improve [Metric]'",
-                 "Add a bullet about your experience with [Keyword]"
-              ],
-              "skills_section_suggestion": ["Move [Skill] to the top of your skills list", "Group [Skill1] and [Skill2] under 'Frontend Development'"],
-              "ats_keywords_to_add": ["{', '.join(missing_skills)} (learn/add only if true)"],
-              "course_recommendations": [
-                 "If you did the 'Meta Front-End Developer' course on Coursera and have a certificate you might have a better chance at winning."
-              ],
-              "warnings": ["Any warnings about overclaiming"]
-            }}
-            
-            Resume:
-            {resume_text[:2000]}
-            
-            Job Description:
-            {job_description[:2000]}
-            """
+        prompt = f"""
+        You are an elite executive career coach and ATS optimization expert.
+        Analyze the candidate's resume and the target job description.
+        Provide highly specific, actionable advice on exactly what sentences to replace and what keywords to add to maximize their chances of getting hired.
+        
+        CRITICAL RULES:
+        1. DO NOT fabricate experience. DO NOT add skills the user does not have.
+        2. Make your suggestions extremely professional and impactful. Focus on action verbs and quantifiable metrics.
+        3. Phrase your suggestions as direct, actionable instructions (e.g., "Replace the sentence '...' with '...'").
+        
+        Return a JSON object with this exact structure:
+        {{
+          "summary_suggestion": "Replace '...' with '...'",
+          "project_bullet_suggestions": [
+             "In the [Project Name] section, replace '...' with '...'",
+             "Add a new bullet to [Experience]: '...'"
+          ],
+          "skills_section_suggestion": [
+             "Move [Skill] to the top of your skills list", 
+             "Group [Skill1] and [Skill2] under 'Frontend Development'"
+          ],
+          "ats_keywords_to_add": ["{', '.join(missing_skills[:10])} (learn/add only if true)"],
+          "course_recommendations": [
+             "Optional: Recommend a specific course to close a critical gap"
+          ],
+          "warnings": ["Any warnings about overclaiming or formatting issues"]
+        }}
+        
+        Resume:
+        {resume_text[:2000]}
+        
+        Job Description:
+        {job_description[:2000]}
+        """
             
         result = generate_content(prompt, json_mode=True)
         if result:
