@@ -21,7 +21,7 @@ def generate_resume_pdf(analysis: dict, tailored_data: dict, job_title: str, com
     
     # Contact Info
     contact = analysis.get("contact_info", {})
-    name = contact.get("name") or "Candidate Name"
+    name = contact.get("name") or analysis.get("name") or "Candidate Name"
     email = contact.get("email", "")
     phone = contact.get("phone", "")
     linkedin = contact.get("linkedin", "")
@@ -48,7 +48,7 @@ def generate_resume_pdf(analysis: dict, tailored_data: dict, job_title: str, com
     pdf.cell(0, 8, "Professional Summary", ln=True)
     pdf.set_font("helvetica", "", 11)
     
-    summary_text = tailored_data.get("tailored_summary") or tailored_data.get("summary_suggestion") or analysis.get("summary", "")
+    summary_text = tailored_data.get("tailored_summary") or tailored_data.get("summary") or tailored_data.get("summary_suggestion") or analysis.get("summary", "")
     # Remove markdown bold if any
     summary_text = summary_text.replace("**", "")
     pdf.multi_cell(0, 6, summary_text)
@@ -74,7 +74,7 @@ def generate_resume_pdf(analysis: dict, tailored_data: dict, job_title: str, com
     pdf.set_font("helvetica", "", 11)
     
     projects = analysis.get("projects", [])
-    project_suggestions = tailored_data.get("tailored_experience") or tailored_data.get("project_bullet_suggestions", [])
+    project_suggestions = tailored_data.get("tailored_experience") or tailored_data.get("projects") or tailored_data.get("project_bullet_suggestions") or []
     
     # Just print the tailored suggestions if available, else original
     if project_suggestions:

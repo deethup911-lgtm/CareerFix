@@ -232,6 +232,14 @@ def api_download_resume_pdf(req: DownloadPDFRequest):
             job_title=req.job_title,
             company=req.company
         )
+        # pdf.output(dest="S") from fpdf2 returns a bytearray, which FastAPI's Response 
+        # doesn't handle automatically (it tries to call .encode() on it).
+        # We must explicitly cast it to bytes.
+        if isinstance(pdf_bytes, bytearray):
+            pdf_bytes = bytes(pdf_bytes)
+        elif isinstance(pdf_bytes, str):
+            pdf_bytes = pdf_bytes.encode('latin-1')
+            
         return Response(content=pdf_bytes, media_type="application/pdf")
     except Exception as e:
         traceback.print_exc()
