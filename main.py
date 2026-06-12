@@ -16,7 +16,7 @@ from modules.job_search import search_jobs
 from modules.job_filter import filter_jobs_by_experience
 from modules.matcher import calculate_match
 from modules.skill_gap import analyze_skill_gaps
-from modules.pdf_generator import generate_resume_pdf
+
 
 app = FastAPI(title="CareerFix API")
 

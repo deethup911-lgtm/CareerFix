@@ -1,13 +1,4 @@
-import re
 from .experience_extractor import extract_job_experience
-
-def is_senior_role(text):
-    text_lower = text.lower()
-    senior_keywords = ["senior", "sr.", "lead", "principal", "staff", "architect", "manager", "director", "experienced", "vp", "vice president"]
-    for word in senior_keywords:
-        if re.search(r'\b' + re.escape(word) + r'\b', text_lower):
-            return True
-    return False
 
 def filter_jobs_by_experience(jobs, candidate_level, candidate_years):
     filtered_jobs = []
