@@ -60,8 +60,14 @@ def calculate_match(candidate_profile, job, chroma_collection=None, job_emb=None
     # 2. Semantic Profile Match
     if job_emb is None or cand_emb is None:
         model = get_model()
-        cand_emb = model.encode(candidate_text, convert_to_tensor=True)
-        job_emb = model.encode(job['title'] + " " + job['description'], convert_to_tensor=True)
+        if cand_emb is None:
+            cand_emb = model.encode(candidate_text, convert_to_tensor=True)
+        if job_emb is None:
+            import torch
+            from .embedding_cache import get_or_create_embedding
+            job_text = job['title'] + " " + job['description']
+            emb_np = get_or_create_embedding(job_text, model)
+            job_emb = torch.tensor(emb_np, dtype=torch.float32)
         
     semantic_sim = util.pytorch_cos_sim(cand_emb, job_emb).item() * 100.0
     semantic_sim = max(0, min(100, semantic_sim))

@@ -113,9 +113,34 @@ def api_match_jobs(req: MatchJobsRequest):
             from modules.matcher import get_model
             model = get_model()
             
-            # BATCH INFERENCE: Process 32 jobs at once on the CPU!
+            # Batch Cache Lookup
+            import torch
+            from modules.embedding_cache import create_cache_db, get_text_hash, get_cached_embedding, save_embedding
+            create_cache_db()
+            
             job_texts = [j['title'] + " " + j['description'] for j in filtered_jobs]
-            job_embs = model.encode(job_texts, convert_to_tensor=True, batch_size=32)
+            job_embs = [None] * len(filtered_jobs)
+            miss_indices = []
+            miss_texts = []
+            
+            for idx, text in enumerate(job_texts):
+                h = get_text_hash(text)
+                cached = get_cached_embedding(h)
+                if cached is not None:
+                    print(f"[CACHE HIT] Job {idx}: hash {h[:8]}")
+                    job_embs[idx] = torch.tensor(cached, dtype=torch.float32)
+                else:
+                    print(f"[CACHE MISS] Job {idx}: hash {h[:8]}")
+                    miss_indices.append(idx)
+                    miss_texts.append(text)
+            
+            if miss_texts:
+                new_embs = model.encode(miss_texts, convert_to_tensor=True, batch_size=32)
+                new_embs_np = new_embs.cpu().numpy() if hasattr(new_embs, 'cpu') else new_embs
+                for i, idx in enumerate(miss_indices):
+                    h = get_text_hash(job_texts[idx])
+                    save_embedding(h, job_texts[idx], new_embs_np[i])
+                    job_embs[idx] = new_embs[i]
             
             # Encode candidate once
             candidate_text = " ".join(analysis.get("skills", [])) + " " + analysis.get("summary", "")
@@ -244,3 +269,20 @@ async def location_autocomplete(q: str):
     except Exception as e:
         print(f"GeoDB Error: {e}")
         return {"data": []}
+
+@app.get("/api/cache/stats")
+def api_cache_stats():
+    try:
+        from modules.embedding_cache import get_cache_stats
+        return get_cache_stats()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/cache/clear")
+def api_cache_clear():
+    try:
+        from modules.embedding_cache import clear_cache
+        clear_cache()
+        return {"status": "success", "message": "Embedding cache cleared successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
