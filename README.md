@@ -11,8 +11,8 @@ CareerFix is a full-stack AI-powered Applicant Tracking System (ATS) simulator a
 - **Multi-Board Job Search** — Simultaneously fetches from Adzuna, Remotive, and JSearch (Google Jobs) using parallel threads.
 - **Semantic Skill Matching** — Uses ChromaDB + `all-MiniLM-L6-v2` to detect synonym matches (e.g. "Neural Networks" ↔ "Deep Learning").
 - **ATS Score Simulator** — Simulates how a corporate ATS software would score your resume against a job: keyword density, section detection, formatting checks, length analysis.
-- **AI Resume Tips & Tailoring** — Ollama generates custom summary rewrites and bullet point fixes for each specific job.
-- **Tailored Resume PDF Export** — Merge your original contact info and education with AI-tailored summaries and bullet points into a clean, downloadable PDF.
+- **AI Resume Tips & Tailoring** — Ollama generates custom summary rewrites and bullet point fixes for each specific job (no direct file export to keep suggestions focused and non-invasive).
+- **Persistent Embedding Cache** — Cache job description embeddings locally using SQLite to reduce SentenceTransformer execution and speed up matching performance.
 - **Interview Question Generator** — Generates targeted interview questions per job (mix of technical + behavioral).
 - **Job Freshness Filter** — Only shows jobs posted within the last 30 days.
 - **Smart Deduplication** — Removes duplicate jobs by title+company hash across all sources.
@@ -56,7 +56,7 @@ CareerFix/
 │   ├── skill_extractor.py         # Local skill parsing from tech_skills.txt
 │   ├── experience_extractor.py    # Regex-based experience year extractor
 │   ├── skill_gap.py               # Cross-job skill gap aggregation
-│   ├── pdf_generator.py           # Tailored Resume PDF export
+│   ├── embedding_cache.py         # SQLite persistent embedding cache module
 │   └── utils.py                   # Shared helpers
 │
 ├── data/
@@ -146,11 +146,12 @@ Frontend runs on `http://localhost:5173`
 | `POST` | `/api/search-jobs` | Fetch live jobs from all boards |
 | `POST` | `/api/match-jobs` | Run semantic ATS matching via ChromaDB |
 | `POST` | `/api/get-resume-suggestions` | AI-tailored resume tips and rewriting |
-| `POST` | `/api/download-resume-pdf` | Download the AI-tailored resume as a PDF document |
 | `POST` | `/api/ats-score` | ATS simulation score based on keyword/format analysis |
 | `POST` | `/api/interview-questions` | Generate 5 targeted interview questions |
 | `POST` | `/api/certifications` | Recommend certifications to close skill gaps |
 | `GET` | `/api/locations/autocomplete?q=` | City autocomplete via GeoDB |
+| `GET` | `/api/cache/stats` | View SQLite embedding cache stats (size, count, path) |
+| `POST` | `/api/cache/clear` | Clear all saved embeddings from SQLite cache |
 
 ---
 
