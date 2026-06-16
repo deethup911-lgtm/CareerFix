@@ -103,7 +103,12 @@ def calculate_match(candidate_profile, job, chroma_collection=None, job_emb=None
         exp_fit = 0.0
         reasons.append("Rejected due to seniority mismatch (Executive/Senior role).")
         
-    final_score = (skill_match * 0.40) + (exp_fit * 0.30) + (semantic_sim * 0.30) - penalty
+    # Calculate missing skills penalty (2 points per missing skill)
+    missing_skills_count = max(0, len(job_skills) - len(matched_skills_list))
+    penalty += missing_skills_count * 2
+    
+    # Calculate final score with 60% skills, 15% experience, 25% semantic profile similarity weights
+    final_score = (skill_match * 0.60) + (exp_fit * 0.15) + (semantic_sim * 0.25) - penalty
     final_score = max(0, min(100, final_score))
     
     confidence = "Low"
