@@ -12,6 +12,58 @@ def get_model():
         _model = SentenceTransformer('all-MiniLM-L6-v2')
     return _model
 
+def classify_job_skills(job_description, job_skills_list):
+    """
+    Classifies a list of job skills into required and preferred based on sentence context.
+    """
+    import re
+    from .skill_extractor import extract_skills_from_text
+    
+    skills_set = set(s.lower() for s in job_skills_list)
+    preferred_skills = set()
+    
+    # Split text into paragraphs/sentences
+    sentences = re.split(r'[.\n]', job_description)
+    
+    preferred_indicators = [
+        r'\bpreferred\b', r'\bplus\b', r'\bnice\s+to\s+have\b', r'\bdesired\b', 
+        r'\bbeneficial\b', r'\badvantage\b', r'\boptional\b', r'\bbonus\b', 
+        r'\bgood\s+to\s+have\b', r'\bwould\s+be\s+great\b', r'\bnot\s+required\b',
+        r'\bideal\s+candidate\s+should\s+have\b'
+    ]
+    preferred_regex = re.compile('|'.join(preferred_indicators), re.IGNORECASE)
+    
+    in_preferred_section = False
+    
+    for sentence in sentences:
+        sentence_clean = sentence.strip()
+        if not sentence_clean:
+            continue
+            
+        lower_sent = sentence_clean.lower()
+        # Detect section headers
+        if any(h in lower_sent for h in ["preferred qualifications", "preferred skills", "nice to have", "desired skills", "bonus", "plusses"]):
+            in_preferred_section = True
+        elif any(h in lower_sent for h in ["basic qualifications", "requirements", "must have", "minimum qualifications", "key responsibilities", "skills required"]):
+            in_preferred_section = False
+            
+        # Parse skills from this sentence
+        sentence_skills = extract_skills_from_text(sentence_clean)
+        for s in sentence_skills:
+            s_low = s.lower()
+            if s_low in skills_set:
+                if in_preferred_section or preferred_regex.search(sentence_clean):
+                    preferred_skills.add(s_low)
+                    
+    required_skills = skills_set - preferred_skills
+    
+    # Map back to original casing
+    skills_casing = {s.lower(): s for s in job_skills_list}
+    req_list = sorted([skills_casing[s] for s in required_skills])
+    pref_list = sorted([skills_casing[s] for s in preferred_skills])
+    
+    return req_list, pref_list
+
 def calculate_match(candidate_profile, job, chroma_collection=None, job_emb=None, cand_emb=None):
     # candidate_profile: dict from resume_analyzer
     candidate_skills = set([s.lower() for s in candidate_profile.get("skills", [])])
@@ -21,22 +73,16 @@ def calculate_match(candidate_profile, job, chroma_collection=None, job_emb=None
     
     # Extract job skills
     job_skills_list = extract_job_skills(job['description'])
-    job_skills = set([s.lower() for s in job_skills_list])
     
-    # Extract Job Experience
-    job_exp_data = extract_job_experience(job['description'])
-    req_min_years = job_exp_data["experience_min"]
-    req_seniority = job_exp_data["seniority"]
+    # Heuristically classify required vs preferred skills
+    required_skills, preferred_skills = classify_job_skills(job['description'], job_skills_list)
     
-    # 1. Skill Match
-    if not job_skills:
-        skill_match = 0
-        matched_skills_list = []
-    else:
-        matched_skills_list = []
+    # Match skills (semantic or exact fallback)
+    matched_skills_set = set()
+    if job_skills_list:
         if chroma_collection and candidate_skills:
             # --- SEMANTIC MATCHING via ChromaDB ---
-            for js in job_skills:
+            for js in job_skills_list:
                 results = chroma_collection.query(
                     query_texts=[js],
                     n_results=1
@@ -45,18 +91,58 @@ def calculate_match(candidate_profile, job, chroma_collection=None, job_emb=None
                     distance = results['distances'][0][0]
                     # A distance < 1.0 means the skills are semantically related!
                     if distance < 1.0:
-                        matched_skills_list.append(js)
+                        matched_skills_set.add(js.lower())
         else:
             # Fallback exact matching
-            matched = candidate_skills.intersection(job_skills)
-            matched_skills_list = list(matched)
-
-        if len(job_skills) <= 2:
-            # If a job only lists 1 or 2 generic skills, don't give it 100% match.
-            skill_match = 20.0 if matched_skills_list else 0
-        else:
-            skill_match = (len(matched_skills_list) / len(job_skills)) * 100.0
+            matched_skills_set = set(s.lower() for s in candidate_skills if s.lower() in [js.lower() for js in job_skills_list])
             
+    # Separate matched required vs preferred
+    matched_required = [s for s in required_skills if s.lower() in matched_skills_set]
+    matched_preferred = [s for s in preferred_skills if s.lower() in matched_skills_set]
+    
+    # Separate missing required vs preferred
+    missing_required = [s for s in required_skills if s.lower() not in matched_skills_set]
+    missing_preferred = [s for s in preferred_skills if s.lower() not in matched_skills_set]
+    
+    # Calculate weighted skill fit score
+    total_required = len(required_skills)
+    total_preferred = len(preferred_skills)
+    
+    denominator = (total_required * 0.8) + (total_preferred * 0.2)
+    if denominator == 0:
+        skill_match = 100.0
+    else:
+        skill_match = ((len(matched_required) * 0.8 + len(matched_preferred) * 0.2) / denominator) * 100.0
+
+    # Extract Job Experience
+    job_exp_data = extract_job_experience(job['description'])
+    req_min_years = job_exp_data["experience_min"]
+    req_seniority = job_exp_data["seniority"]
+    
+    # Calculate Experience Score Fit
+    penalty = 0
+    reasons = []
+    
+    exp_not_specified = (req_min_years == 0 and (req_seniority.lower() in ["entry-level", "not specified", "unknown"] or not req_seniority))
+    
+    if exp_not_specified:
+        exp_fit = 80.0
+    elif candidate_years >= req_min_years:
+        exp_fit = 100.0
+    else:
+        if req_min_years > 0:
+            exp_fit = max(40.0, (candidate_years / req_min_years) * 100.0)
+            reasons.append(f"Under-experienced (needs {req_min_years} yrs, has {candidate_years} yrs).")
+        else:
+            exp_fit = 100.0
+            
+    # Seniority Mismatch Penalties
+    exec_seniorities = ["Executive", "Senior", "Principal", "Director"]
+    if candidate_level in ["Fresher", "Junior"] and req_seniority in exec_seniorities:
+        penalty += 50
+        exp_fit = 0.0
+        reasons.append("Rejected due to seniority mismatch (Executive/Senior role).")
+        
     # 2. Semantic Profile Match
     if job_emb is None or cand_emb is None:
         model = get_model()
@@ -69,47 +155,30 @@ def calculate_match(candidate_profile, job, chroma_collection=None, job_emb=None
             emb_np = get_or_create_embedding(job_text, model)
             job_emb = torch.tensor(emb_np, dtype=torch.float32)
         
-    semantic_sim = util.pytorch_cos_sim(cand_emb, job_emb).item() * 100.0
-    semantic_sim = max(0, min(100, semantic_sim))
+    raw_cosine = util.pytorch_cos_sim(cand_emb, job_emb).item()
     
-    # 3. Experience Match (30%) & Penalty Logic
-    exp_fit = 100.0
-    penalty = 0
-    reasons = []
+    # Scale raw cosine similarity from range [0.1, 0.6] to [0, 100]
+    semantic_sim = ((raw_cosine - 0.1) / (0.6 - 0.1)) * 100.0
+    semantic_sim = max(0.0, min(100.0, semantic_sim))
     
-    years_delta = req_min_years - candidate_years
+    # Calculate required & preferred skill penalties
+    required_penalty = min(20.0, len(missing_required) * 4.0)
+    preferred_penalty = min(5.0, len(missing_preferred) * 1.0)
     
-    if years_delta > 0:
-        # Candidate has fewer years than required
-        if years_delta <= 1:
-            exp_fit = 80.0
-        elif years_delta <= 2:
-            exp_fit = 50.0
-            penalty += 10
-            reasons.append(f"Slightly under-experienced (needs {req_min_years} yrs).")
-        elif years_delta <= 4:
-            exp_fit = 20.0
-            penalty += 40
-            reasons.append(f"Under-experienced (needs {req_min_years} yrs).")
-        else:
-            exp_fit = 0.0
-            penalty += 70
-            reasons.append(f"Severely under-experienced (needs {req_min_years} yrs, has {candidate_years}).")
-            
-    # Seniority Mismatch Penalties
-    exec_seniorities = ["Executive", "Senior", "Principal", "Director"]
-    if candidate_level in ["Fresher", "Junior"] and req_seniority in exec_seniorities:
-        penalty += 50
-        exp_fit = 0.0
-        reasons.append("Rejected due to seniority mismatch (Executive/Senior role).")
+    penalty += required_penalty + preferred_penalty
+    
+    total_jd_skills = len(job_skills_list)
+    if total_jd_skills <= 2:
+        skill_weight = 0.40
+        semantic_weight = 0.45
+        exp_weight = 0.15
+    else:
+        skill_weight = 0.60
+        semantic_weight = 0.25
+        exp_weight = 0.15
         
-    # Calculate missing skills penalty (2 points per missing skill)
-    missing_skills_count = max(0, len(job_skills) - len(matched_skills_list))
-    penalty += missing_skills_count * 2
-    
-    # Calculate final score with 60% skills, 15% experience, 25% semantic profile similarity weights
-    final_score = (skill_match * 0.60) + (exp_fit * 0.15) + (semantic_sim * 0.25) - penalty
-    final_score = max(0, min(100, final_score))
+    final_score = (skill_match * skill_weight) + (exp_fit * exp_weight) + (semantic_sim * semantic_weight) - penalty
+    final_score = max(0.0, min(100.0, final_score))
     
     confidence = "Low"
     if final_score > 70:
@@ -121,10 +190,17 @@ def calculate_match(candidate_profile, job, chroma_collection=None, job_emb=None
         "final_score": round(final_score, 1),
         "skill_match": round(skill_match, 1),
         "experience_match": round(exp_fit, 1),
-        "profile_match": round(semantic_sim, 1),
+        "resume_relevance": round(semantic_sim, 1),
+        "profile_match": round(semantic_sim, 1), # Backward compatibility alias
         "job_experience_requirement": f"{job_exp_data['experience_min']}-{job_exp_data['experience_max']} Years ({req_seniority})" if (job_exp_data['experience_min'] != 0 or job_exp_data['experience_max'] != 99) else f"Not Specified ({req_seniority})",
-        "matched_skills": [s for s in job_skills_list if s.lower() in [m.lower() for m in matched_skills_list]],
-        "missing_skills": [s for s in job_skills_list if s.lower() not in [m.lower() for m in matched_skills_list]],
+        "matched_skills": [s for s in job_skills_list if s.lower() in matched_skills_set], # Backward compatibility alias
+        "missing_skills": [s for s in job_skills_list if s.lower() not in matched_skills_set], # Backward compatibility alias
+        "matched_required": matched_required,
+        "matched_preferred": matched_preferred,
+        "missing_required": missing_required,
+        "missing_preferred": missing_preferred,
+        "required_penalty": round(required_penalty, 1),
+        "preferred_penalty": round(preferred_penalty, 1),
         "rejection_reasons": reasons,
         "confidence": confidence
     }

@@ -226,7 +226,7 @@ if st.session_state.jobs and st.session_state.resume_analysis:
                 <p>
                     <strong>Final Match:</strong> {m['final_score']}% | 
                     <strong>Skill Match:</strong> {m['skill_match']}% | 
-                    <strong>Profile Match:</strong> {m['profile_match']}% |
+                    <strong>Resume Relevance:</strong> {m['resume_relevance']}% |
                     <strong>Confidence:</strong> {m['confidence']}
                 </p>
                 <p>

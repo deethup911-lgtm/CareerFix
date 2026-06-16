@@ -14,8 +14,8 @@ export default function OutputPage({
   
   const safeRoles = Array.isArray(recommendedRoles) ? recommendedRoles : (recommendedRoles?.roles || []);
   const topRoles = safeRoles.slice(0, 5);
-  const initialRole = topRoles.length > 0 ? (topRoles[0].role || topRoles[0]) : "";
-  const [jobTitles, setJobTitles] = useState([initialRole]);
+  const initialRoles = topRoles.length > 0 ? topRoles.slice(0, 3).map(r => r.role || r) : [""];
+  const [jobTitles, setJobTitles] = useState(initialRoles);
   const [locations, setLocations] = useState(["Remote", "India"]);
   const [jobTypeFilter, setJobTypeFilter] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -39,7 +39,7 @@ export default function OutputPage({
 
   React.useEffect(() => {
     if (jobTitles.length === 1 && jobTitles[0] === "" && topRoles.length > 0) {
-      setJobTitles([topRoles[0].role || topRoles[0]]);
+      setJobTitles(topRoles.slice(0, 3).map(r => r.role || r));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(topRoles)]);
@@ -476,7 +476,7 @@ export default function OutputPage({
                 <div className="flex justify-between items-center">
                   <h3 style={{ margin: 0 }}>{m.job.title} @ {m.job.company}</h3>
                   <span className="badge" style={{ fontSize: '1rem', background: 'var(--primary-green)', color: 'white' }}>
-                    {m.match_data.final_score}% Match
+                    {m.match_data.final_score}% Compatibility
                   </span>
                 </div>
                 
@@ -511,13 +511,13 @@ export default function OutputPage({
                 
                 <div className="flex" style={{ flexWrap: 'wrap', gap: '1rem', marginTop: '0.75rem', fontSize: '0.9rem' }}>
                   <span className="badge badge-outline" style={{ borderColor: 'var(--primary-green)', color: 'var(--primary-green)' }}>
-                    Skill Match: {m.match_data.skill_match}%
+                    Skills Fit: {m.match_data.skill_match}%
                   </span>
                   <span className="badge badge-outline" style={{ borderColor: '#60a5fa', color: '#60a5fa' }}>
-                    Exp Match: {m.match_data.experience_match}%
+                    Experience Fit: {m.match_data.experience_match}%
                   </span>
                   <span className="badge badge-outline" style={{ borderColor: '#a855f7', color: '#a855f7' }}>
-                    Profile Match: {m.match_data.profile_match}%
+                    Resume Relevance: {m.match_data.resume_relevance}%
                   </span>
                 </div>
                 
@@ -533,9 +533,30 @@ export default function OutputPage({
                 )}
                 
                 <div className="flex" style={{ flexWrap: 'wrap', gap: '0.5rem', marginTop: '1rem' }}>
-                  {m.match_data.missing_skills?.slice(0, 5).map(s => (
-                    <span key={s} className="badge badge-outline" style={{ borderColor: '#fca5a5', color: '#dc2626' }}>Missing: {s}</span>
-                  ))}
+                  {m.match_data.missing_required && m.match_data.missing_required.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.5rem', width: '100%' }}>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#dc2626', alignSelf: 'center' }}>Missing Required:</span>
+                      {m.match_data.missing_required.map(s => (
+                        <span key={s} className="badge badge-outline" style={{ borderColor: '#fca5a5', color: '#dc2626' }}>{s}</span>
+                      ))}
+                    </div>
+                  )}
+                  {m.match_data.missing_preferred && m.match_data.missing_preferred.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.5rem', width: '100%' }}>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#d97706', alignSelf: 'center' }}>Missing Preferred:</span>
+                      {m.match_data.missing_preferred.map(s => (
+                        <span key={s} className="badge badge-outline" style={{ borderColor: '#fde68a', color: '#b45309' }}>{s}</span>
+                      ))}
+                    </div>
+                  )}
+                  {(!m.match_data.missing_required || m.match_data.missing_required.length === 0) && (!m.match_data.missing_preferred || m.match_data.missing_preferred.length === 0) && m.match_data.missing_skills && m.match_data.missing_skills.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.5rem', width: '100%' }}>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#dc2626', alignSelf: 'center' }}>Missing Skills:</span>
+                      {m.match_data.missing_skills.slice(0, 5).map(s => (
+                        <span key={s} className="badge badge-outline" style={{ borderColor: '#fca5a5', color: '#dc2626' }}>{s}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 
                 {/* Action Buttons */}
