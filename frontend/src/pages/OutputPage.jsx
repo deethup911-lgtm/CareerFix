@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Search, Briefcase, FileSignature, ArrowRight, Loader, Plus, X, Filter } from 'lucide-react';
+import { Search, Briefcase, FileSignature, ArrowRight, Loader, Plus, X, Filter, ChevronDown, ChevronUp } from 'lucide-react';
 import AutocompleteInput from '../components/AutocompleteInput';
 
 export default function OutputPage({ 
@@ -20,6 +20,22 @@ export default function OutputPage({
   const [jobTypeFilter, setJobTypeFilter] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState(null);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [appliedJobs, setAppliedJobs] = useState({});
+  const [visiblePanels, setVisiblePanels] = useState({});
+
+  const togglePanel = (idx, panelKey) => {
+    setVisiblePanels(prev => {
+      const jobPanels = prev[idx] || {};
+      return {
+        ...prev,
+        [idx]: {
+          ...jobPanels,
+          [panelKey]: !jobPanels[panelKey]
+        }
+      };
+    });
+  };
 
   React.useEffect(() => {
     if (jobTitles.length === 1 && jobTitles[0] === "" && topRoles.length > 0) {
@@ -76,6 +92,9 @@ export default function OutputPage({
     setAtsResults({});
     setInterviewResults({});
     setCertResults({});
+    setHasSearched(false);
+    setAppliedJobs({});
+    setVisiblePanels({});
     
     try {
       const searchRes = await fetch("http://localhost:8000/api/search-jobs", {
@@ -108,6 +127,7 @@ export default function OutputPage({
         
         setMatchedJobs(matchData.matched_jobs);
       }
+      setHasSearched(true);
       
     } catch (err) {
       setError(err.message);
@@ -117,6 +137,10 @@ export default function OutputPage({
   };
 
   const handleGetSuggestions = async (job, matchData, idx) => {
+    if (suggestions[idx]) {
+      togglePanel(idx, "suggestions");
+      return;
+    }
     setSuggestionLoading(prev => ({ ...prev, [idx]: true }));
     try {
       const res = await fetch("http://localhost:8000/api/get-resume-suggestions", {
@@ -134,6 +158,10 @@ export default function OutputPage({
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Failed to get suggestions");
       setSuggestions(prev => ({ ...prev, [idx]: data }));
+      setVisiblePanels(prev => ({
+        ...prev,
+        [idx]: { ...(prev[idx] || {}), suggestions: true }
+      }));
     } catch (err) {
       alert("Failed to get suggestions: " + err.message);
     } finally {
@@ -142,6 +170,10 @@ export default function OutputPage({
   };
 
   const handleGetATSScore = async (job, idx) => {
+    if (atsResults[idx]) {
+      togglePanel(idx, "ats");
+      return;
+    }
     setAtsLoading(prev => ({ ...prev, [idx]: true }));
     try {
       const res = await fetch("http://localhost:8000/api/ats-score", {
@@ -154,6 +186,10 @@ export default function OutputPage({
       });
       const data = await res.json();
       setAtsResults(prev => ({ ...prev, [idx]: data }));
+      setVisiblePanels(prev => ({
+        ...prev,
+        [idx]: { ...(prev[idx] || {}), ats: true }
+      }));
     } catch (err) {
       alert("ATS Score failed: " + err.message);
     } finally {
@@ -162,6 +198,10 @@ export default function OutputPage({
   };
 
   const handleGetInterviewQuestions = async (job, idx) => {
+    if (interviewResults[idx]) {
+      togglePanel(idx, "interview");
+      return;
+    }
     setInterviewLoading(prev => ({ ...prev, [idx]: true }));
     try {
       const res = await fetch("http://localhost:8000/api/interview-questions", {
@@ -175,6 +215,10 @@ export default function OutputPage({
       });
       const data = await res.json();
       setInterviewResults(prev => ({ ...prev, [idx]: data }));
+      setVisiblePanels(prev => ({
+        ...prev,
+        [idx]: { ...(prev[idx] || {}), interview: true }
+      }));
     } catch (err) {
       alert("Interview questions failed: " + err.message);
     } finally {
@@ -183,6 +227,10 @@ export default function OutputPage({
   };
 
   const handleGetCertifications = async (matchData, job, idx) => {
+    if (certResults[idx]) {
+      togglePanel(idx, "cert");
+      return;
+    }
     setCertLoading(prev => ({ ...prev, [idx]: true }));
     try {
       const res = await fetch("http://localhost:8000/api/certifications", {
@@ -195,6 +243,10 @@ export default function OutputPage({
       });
       const data = await res.json();
       setCertResults(prev => ({ ...prev, [idx]: data }));
+      setVisiblePanels(prev => ({
+        ...prev,
+        [idx]: { ...(prev[idx] || {}), cert: true }
+      }));
     } catch (err) {
       alert("Certifications failed: " + err.message);
     } finally {
@@ -210,6 +262,33 @@ export default function OutputPage({
       if (days === 1) return "1 day ago";
       return `${days} days ago`;
     } catch { return null; }
+  };
+
+  const renderSuggestionItem = (text) => {
+    if (!text) return null;
+    
+    const match = text.match(/replace\s+['"`‘’“”](.*?)['"`‘’“”]\s+with\s+['"`‘’“”](.*?)['"`‘’“”]/i);
+    if (match) {
+      const original = match[1];
+      const replacement = match[2];
+      
+      const replaceIndex = text.toLowerCase().indexOf("replace");
+      const prefix = replaceIndex > 0 ? text.substring(0, replaceIndex).trim() : "";
+      
+      return (
+        <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          {prefix && <span style={{ fontWeight: '600', color: 'var(--text-main)' }}>{prefix}</span>}
+          <div style={{ padding: '0.5rem 0.75rem', background: 'rgba(218,54,51,0.06)', borderLeft: '3px solid #DA3633', borderRadius: '4px', fontStyle: 'italic', fontSize: '0.9rem' }}>
+            <strong style={{ color: '#DA3633', fontStyle: 'normal' }}>Replace:</strong> "{original}"
+          </div>
+          <div style={{ padding: '0.5rem 0.75rem', background: 'rgba(22,163,74,0.06)', borderLeft: '3px solid var(--primary-green)', borderRadius: '4px', fontStyle: 'italic', fontSize: '0.9rem' }}>
+            <strong style={{ color: 'var(--primary-green)', fontStyle: 'normal' }}>With:</strong> "{replacement}"
+          </div>
+        </div>
+      );
+    }
+    
+    return <span style={{ fontStyle: 'italic' }}>{text}</span>;
   };
 
   const getJobTypeColor = (type) => {
@@ -249,7 +328,7 @@ export default function OutputPage({
         {resumeAnalysis.raw_text && (
           <details style={{ marginTop: '1.5rem', padding: '1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)' }}>
             <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: 'var(--text-muted)' }}>
-              📄 View Extracted Resume Text (Debug)
+              📄 View Extracted Resume Text 
             </summary>
             <pre style={{ marginTop: '1rem', whiteSpace: 'pre-wrap', fontSize: '0.8rem', background: '#0d1117', padding: '1rem', borderRadius: '4px', maxHeight: '300px', overflowY: 'auto' }}>
               {resumeAnalysis.raw_text}
@@ -385,7 +464,7 @@ export default function OutputPage({
         </button>
       </div>
 
-      {matchedJobs.length > 0 && (
+      {hasSearched && matchedJobs.length > 0 && (
         <>
           <div className="flex justify-between items-center mb-4">
             <h2>Top Matches ({matchedJobs.length} jobs)</h2>
@@ -423,6 +502,11 @@ export default function OutputPage({
                       🕐 {getDaysAgo(m.job.date_posted)}
                     </span>
                   )}
+                  {m.job.date_posted && (getDaysAgo(m.job.date_posted) === "Today" || getDaysAgo(m.job.date_posted) === "1 day ago") && (
+                    <span style={{ padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.75rem', border: '1px solid #2e8b57', backgroundColor: '#eaf5ee', color: '#2e8b57', fontWeight: '600' }}>
+                      🔥 Be an Early Applicant
+                    </span>
+                  )}
                 </div>
                 
                 <div className="flex" style={{ flexWrap: 'wrap', gap: '1rem', marginTop: '0.75rem', fontSize: '0.9rem' }}>
@@ -456,51 +540,62 @@ export default function OutputPage({
                 
                 {/* Action Buttons */}
                 <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  <a href={m.job.url} target="_blank" rel="noreferrer" className="btn btn-primary" style={{ padding: '0.5rem 1rem' }}>
-                    Apply Now
+                  <a 
+                    href={m.job.url} 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    className={appliedJobs[idx] ? "btn btn-secondary" : "btn btn-primary"} 
+                    onClick={() => setAppliedJobs(prev => ({ ...prev, [idx]: true }))}
+                    style={{ padding: '0.5rem 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+                  >
+                    {appliedJobs[idx] ? "✓ Applied" : "Apply Now"}
                   </a>
                   
                   <button 
                     className="btn btn-outline" 
                     onClick={() => handleGetSuggestions(m.job, m.match_data, idx)}
                     disabled={suggestionLoading[idx]}
-                    style={{ padding: '0.5rem 1rem' }}
+                    style={{ padding: '0.5rem 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
                   >
                     {suggestionLoading[idx] ? 'Analyzing...' : '✨ AI Resume Tips'}
+                    {suggestions[idx] && (visiblePanels[idx]?.suggestions ? <ChevronUp size={16} /> : <ChevronDown size={16} />)}
                   </button>
-
+ 
                   <button 
                     className="btn btn-outline" 
                     onClick={() => handleGetATSScore(m.job, idx)}
                     disabled={atsLoading[idx]}
-                    style={{ padding: '0.5rem 1rem' }}
+                    style={{ padding: '0.5rem 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
                   >
                     {atsLoading[idx] ? 'Scoring...' : '🤖 ATS Score'}
+                    {atsResults[idx] && (visiblePanels[idx]?.ats ? <ChevronUp size={16} /> : <ChevronDown size={16} />)}
                   </button>
-
+ 
                   <button 
                     className="btn btn-outline" 
                     onClick={() => handleGetInterviewQuestions(m.job, idx)}
                     disabled={interviewLoading[idx]}
-                    style={{ padding: '0.5rem 1rem' }}
+                    style={{ padding: '0.5rem 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
                   >
                     {interviewLoading[idx] ? 'Loading...' : '🎯 Interview Prep'}
+                    {interviewResults[idx] && (visiblePanels[idx]?.interview ? <ChevronUp size={16} /> : <ChevronDown size={16} />)}
                   </button>
-
+ 
                   {m.match_data.missing_skills?.length > 0 && (
                     <button 
                       className="btn btn-outline" 
                       onClick={() => handleGetCertifications(m.match_data, m.job, idx)}
                       disabled={certLoading[idx]}
-                      style={{ padding: '0.5rem 1rem' }}
+                      style={{ padding: '0.5rem 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
                     >
                       {certLoading[idx] ? 'Loading...' : '🎓 Certifications'}
+                      {certResults[idx] && (visiblePanels[idx]?.cert ? <ChevronUp size={16} /> : <ChevronDown size={16} />)}
                     </button>
                   )}
                 </div>
                 
                 {/* ATS Score Panel */}
-                {atsResults[idx] && (
+                {atsResults[idx] && visiblePanels[idx]?.ats && (
                   <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(37,99,235,0.08)', borderRadius: '8px', border: '1px solid rgba(37,99,235,0.3)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                       <h4 style={{ margin: 0, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -556,7 +651,7 @@ export default function OutputPage({
                 )}
 
                 {/* Interview Questions Panel */}
-                {interviewResults[idx] && (
+                {interviewResults[idx] && visiblePanels[idx]?.interview && (
                   <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(124,58,237,0.08)', borderRadius: '8px', border: '1px solid rgba(124,58,237,0.3)' }}>
                     <h4 style={{ margin: '0 0 1rem 0', color: '#a78bfa' }}>🎯 Interview Prep Questions</h4>
                     {interviewResults[idx].questions?.map((q, i) => (
@@ -574,7 +669,7 @@ export default function OutputPage({
                 )}
 
                 {/* Certifications Panel */}
-                {certResults[idx] && (
+                {certResults[idx] && certResults[idx].certifications?.length > 0 && visiblePanels[idx]?.cert && (
                   <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(217,119,6,0.08)', borderRadius: '8px', border: '1px solid rgba(217,119,6,0.3)' }}>
                     <h4 style={{ margin: '0 0 1rem 0', color: '#fbbf24' }}>🎓 Recommended Certifications to Close Skill Gaps</h4>
                     {certResults[idx].certifications?.map((cert, i) => (
@@ -595,7 +690,7 @@ export default function OutputPage({
                 )}
 
                 {/* AI Resume Suggestions Panel */}
-                {suggestions[idx] && (
+                {suggestions[idx] && visiblePanels[idx]?.suggestions && (
                   <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: 'var(--light-green)', borderRadius: 'var(--radius-sm)' }}>
                     <h4 style={{ color: 'var(--primary-green)', marginBottom: '1rem' }}>
                       Tailoring Suggestions for this Role
@@ -603,23 +698,23 @@ export default function OutputPage({
                     
                     <div style={{ marginBottom: '1rem' }}>
                       <strong>Summary Rewrite:</strong>
-                      <p style={{ margin: '0.25rem 0 0 0', fontStyle: 'italic' }}>{suggestions[idx].summary_suggestion}</p>
+                      {renderSuggestionItem(suggestions[idx].summary_suggestion)}
                     </div>
                     
                     <div style={{ marginBottom: '1rem' }}>
                       <strong>Project Bullet Fixes:</strong>
-                      <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.5rem' }}>
+                      <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                         {suggestions[idx].project_bullet_suggestions?.map((b, i) => (
-                          <li key={i}>{b}</li>
+                          <li key={i}>{renderSuggestionItem(b)}</li>
                         ))}
                       </ul>
                     </div>
                     
                     <div style={{ marginBottom: '1rem' }}>
                       <strong>Skills Formatting:</strong>
-                      <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.5rem' }}>
+                      <ul style={{ margin: '0.25rem 0 0 0', paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         {suggestions[idx].skills_section_suggestion?.map((s, i) => (
-                          <li key={i}>{s}</li>
+                          <li key={i}>{renderSuggestionItem(s)}</li>
                         ))}
                       </ul>
                     </div>
@@ -647,6 +742,14 @@ export default function OutputPage({
             ))}
           </div>
         </>
+      )}
+
+      {hasSearched && matchedJobs.length === 0 && !isSearching && (
+        <div className="card text-center" style={{ padding: '2rem' }}>
+          <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+            No matching jobs found. Try adjusting your search filters or adding different job titles.
+          </p>
+        </div>
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 from .utils import get_env_var
-from .ollama_client import generate_content
+from .ollama_client import generate_content, REASONING_MODEL
 
 def generate_interview_questions(job_description, resume_skills):
     try:
@@ -18,7 +18,7 @@ def generate_interview_questions(job_description, resume_skills):
         Job Description:
         {job_description[:1500]}
         """
-        result = generate_content(prompt, json_mode=True)
+        result = generate_content(prompt, json_mode=True, model=REASONING_MODEL)
         if result:
             return result
         else:

@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UploadCloud, FileText, Type } from 'lucide-react';
 
-export default function UploadPage({ setResumeAnalysis, setRecommendedRoles }) {
+export default function UploadPage({ setResumeAnalysis, setRecommendedRoles, setJobs, setMatchedJobs }) {
   const [inputType, setInputType] = useState('upload'); // 'upload' or 'paste'
   const [file, setFile] = useState(null);
   const [pastedText, setPastedText] = useState('');
@@ -56,6 +56,8 @@ export default function UploadPage({ setResumeAnalysis, setRecommendedRoles }) {
       
       setResumeAnalysis(data.analysis);
       setRecommendedRoles(data.recommended_roles);
+      if (setJobs) setJobs([]);
+      if (setMatchedJobs) setMatchedJobs([]);
       
       // Navigate to output page
       navigate('/output');

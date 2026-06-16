@@ -131,28 +131,13 @@ def simulate_ats_score(resume_text: str, job_description: str) -> dict:
     jd_lower = job_description.lower()
 
     # --- 1. Skill-Based Keyword Matching (40 points) ---
-    # Extract multi-word and single-word skills from JD that exist in our taxonomy
-    jd_keywords = set()
-
-    # First pass: check for multi-word taxonomy skills (e.g. "machine learning", "react native")
-    for skill in _SKILL_TAXONOMY:
-        if len(skill) < 2:
-            continue
-        # Use word boundary for single words, flexible match for multi-word skills
-        if ' ' in skill:
-            if re.search(re.escape(skill), jd_lower):
-                jd_keywords.add(skill)
-        else:
-            if re.search(r'\b' + re.escape(skill) + r'\b', jd_lower):
-                jd_keywords.add(skill)
-
-    # Second pass: if we found very few taxonomy skills, supplement with meaningful JD words
-    if len(jd_keywords) < 5:
-        raw_words = re.findall(r'\b[a-zA-Z][a-zA-Z0-9\+\#\.]{2,}\b', job_description)
-        for w in set(raw_words):
-            wl = w.lower()
-            if wl not in STOPWORDS and len(wl) > 3:
-                jd_keywords.add(wl)
+    # Extract clean technical skills from JD using our robust unified skill extractor
+    from .skill_extractor import extract_skills_from_text
+    from .job_analyzer import clean_extracted_skills
+    
+    extracted = extract_skills_from_text(job_description)
+    cleaned = clean_extracted_skills(extracted)
+    jd_keywords = set(s.lower() for s in cleaned)
 
     matched_kw = []
     missing_kw = []

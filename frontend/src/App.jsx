@@ -29,6 +29,8 @@ function App() {
             <UploadPage 
               setResumeAnalysis={setResumeAnalysis} 
               setRecommendedRoles={setRecommendedRoles} 
+              setJobs={setJobs}
+              setMatchedJobs={setMatchedJobs}
             />
           } />
           <Route path="/output" element={

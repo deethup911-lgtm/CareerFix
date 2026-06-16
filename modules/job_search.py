@@ -219,7 +219,83 @@ def search_jsearch_jobs(role, location="Remote", limit=10):
             time.sleep(1.5)
     return []
 
+def is_past_event_job(title, today_date):
+    """
+    Parses dates from the title (e.g., '13-Jun-26', '13-May-26', '13 Jun 2026') 
+    and returns True if the date is strictly in the past compared to today_date.
+    """
+    import re
+    from datetime import datetime
+    
+    title_lower = title.lower()
+    
+    months_map = {
+        "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+        "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12
+    }
+    
+    # Pattern 1: DD-MMM-YY, DD-MMM-YYYY, DD MMM YY, DD MMM YYYY (with dash, space, or slash)
+    # e.g., '13-Jun-26', '13 Jun 2026', '13/Jun/26'
+    match = re.search(r'(?<![a-zA-Z0-9])(\d{1,2})[-\s\/](jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)(?:[a-z]*)[-\s\/](\d{2,4})(?![a-zA-Z0-9])', title_lower)
+    if match:
+        day = int(match.group(1))
+        month = months_map[match.group(2)]
+        year_str = match.group(3)
+        if len(year_str) == 2:
+            year = 2000 + int(year_str)
+        else:
+            year = int(year_str)
+            
+        try:
+            event_date = datetime(year, month, day).date()
+            if event_date < today_date:
+                return True
+        except ValueError:
+            pass
+            
+    # Pattern 2: DD/MM/YYYY, DD/MM/YY, DD-MM-YYYY, DD-MM-YY
+    # e.g., '13/06/2026', '13-05-26'
+    match = re.search(r'(?<![a-zA-Z0-9])(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})(?![a-zA-Z0-9])', title_lower)
+    if match:
+        day = int(match.group(1))
+        month = int(match.group(2))
+        year_str = match.group(3)
+        if len(year_str) == 2:
+            year = 2000 + int(year_str)
+        else:
+            year = int(year_str)
+            
+        try:
+            event_date = datetime(year, month, day).date()
+            if event_date < today_date:
+                return True
+        except ValueError:
+            pass
+            
+    return False
+
 def search_jobs(roles, locations, job_type_filter=None):
+    # Expand roles to include base titles (e.g. "AI Engineer" instead of only "Junior AI Engineer")
+    # to search more broadly and let experience filters handle the seniority.
+    expanded_roles = []
+    seen_roles = set()
+    for r in roles:
+        r_clean = r.strip()
+        if not r_clean:
+            continue
+        if r_clean.lower() not in seen_roles:
+            expanded_roles.append(r_clean)
+            seen_roles.add(r_clean.lower())
+            
+        # Strip common junior/entry level prefixes and suffixes indicating entry level positions
+        base_r = re.sub(r'(?i)\b(junior|jr\.?|associate|entry\s+level|trainee|intern)\b', '', r_clean)
+        base_r = re.sub(r'\s+', ' ', base_r).strip()
+        
+        if base_r and base_r.lower() not in seen_roles and len(base_r) > 2:
+            expanded_roles.append(base_r)
+            seen_roles.add(base_r.lower())
+            
+    roles = expanded_roles
     all_jobs = []
     seen_keys = set()   # Smarter dedup: title+company
     seen_urls = set()   # Also keep URL dedup as backup
@@ -273,20 +349,24 @@ def search_jobs(roles, locations, job_type_filter=None):
             today = datetime.utcnow().date()
             delta_days = (today - max_dt).days
             
-            # Shift only if there's a significant positive delta
-            if delta_days > 0:
-                filtered_shifted_jobs = []
-                for j in all_jobs:
-                    dp = j.get("date_posted")
-                    if dp:
-                        dt = parse_date_string(dp)
-                        if dt:
-                            # Filter out jobs that are genuinely older than 30 days relative to the latest retrieved job
-                            if (max_dt - dt).days > 30:
-                                continue
+            # Filter out stale jobs (>30 days older than max_dt) and shift remaining jobs to today if needed
+            filtered_shifted_jobs = []
+            for j in all_jobs:
+                dp = j.get("date_posted")
+                if dp:
+                    dt = parse_date_string(dp)
+                    if dt:
+                        # Filter out jobs that are genuinely older than 30 days relative to the latest retrieved job
+                        if (max_dt - dt).days > 30:
+                            continue
+                        if delta_days > 0:
                             shifted_dt = dt + timedelta(days=delta_days)
                             j["date_posted"] = shifted_dt.strftime("%Y-%m-%d")
-                    filtered_shifted_jobs.append(j)
-                all_jobs = filtered_shifted_jobs
+                filtered_shifted_jobs.append(j)
+            all_jobs = filtered_shifted_jobs
                 
+    # Filter out past walk-in drives or events
+    today = datetime.utcnow().date()
+    all_jobs = [j for j in all_jobs if not is_past_event_job(j.get("title", ""), today)]
+    
     return all_jobs

@@ -5,15 +5,16 @@ import json
 # Default to Ollama's standard local port
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 
-# Use OLLAMA_MODEL environment variable if set, otherwise default to the fast testing model
-MODEL_NAME = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+# Configurable model routing
+DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+REASONING_MODEL = os.getenv("OLLAMA_REASONING_MODEL", "qwen3:8b")
 
-def generate_content(prompt, json_mode=False):
+def generate_content(prompt, json_mode=False, model=DEFAULT_MODEL):
     """
     Sends a prompt to the local Ollama instance and returns the parsed JSON or text.
     """
     payload = {
-        "model": MODEL_NAME,
+        "model": model,
         "prompt": prompt,
         "stream": False
     }
