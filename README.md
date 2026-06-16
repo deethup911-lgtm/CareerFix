@@ -95,17 +95,20 @@ npm install
 ```
 
 ### 3. Setup Local AI (Ollama)
-Download and install [Ollama](https://ollama.com/). Then, pull the default testing model (or configure your own):
+Download and install [Ollama](https://ollama.com/). Ensure the Ollama background service is running, and pull both models (a lightweight model for parsing/extraction and a reasoning model for tailoring and preparation suggestions):
 ```bash
-ollama run qwen2.5:3b
+# Pull the required models
+ollama pull qwen2.5:3b
+ollama pull qwen3:8b
 ```
 
 ### 4. Configure API Keys
 
 Create a `.env` file in the root directory:
 ```env
-# Optional: Set your preferred Ollama model (default is qwen2.5:3b)
+# Ollama model configuration (defaults)
 OLLAMA_MODEL=qwen2.5:3b
+OLLAMA_REASONING_MODEL=qwen3:8b
 
 # Job Board APIs
 ADZUNA_APP_ID=your_adzuna_app_id
@@ -124,8 +127,13 @@ RAPIDAPI_KEY=your_rapidapi_key
 ### 5. Start the Services
 
 **Start the Backend:**
+*General:*
 ```bash
 uvicorn main:app --reload
+```
+*On Windows (using virtual environment):*
+```powershell
+.\venv\Scripts\python -m uvicorn main:app --reload
 ```
 Backend runs on `http://localhost:8000`
 
