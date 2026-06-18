@@ -17,7 +17,9 @@ export default function OutputPage({
   const initialRoles = topRoles.length > 0 ? topRoles.slice(0, 3).map(r => r.role || r) : [""];
   const [jobTitles, setJobTitles] = useState(initialRoles);
   const [locations, setLocations] = useState(["Remote", "India"]);
-  const [jobTypeFilter, setJobTypeFilter] = useState("");
+  const [jobTypeFilter, setJobTypeFilter] = useState(
+    resumeAnalysis?.experience_level === 'Student' ? 'Internship' : ''
+  );
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
@@ -103,7 +105,8 @@ export default function OutputPage({
         body: JSON.stringify({
           roles: activeRoles,
           locations: activeLocations,
-          job_type: jobTypeFilter || null
+          job_type: jobTypeFilter || null,
+          candidate_level: resumeAnalysis?.experience_level || null
         })
       });
       

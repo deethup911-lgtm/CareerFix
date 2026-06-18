@@ -1,6 +1,16 @@
 import os
 import re
 
+# ---------------------------------------------------------------------------
+# Module-level skill cache — files are read from disk only ONCE per process.
+# Before this fix, load_skills() was called inside extract_skills_from_text()
+# on every invocation: once per resume, once per job, and once per sentence
+# inside classify_job_skills() in matcher.py (~1,000 disk reads per session).
+# ---------------------------------------------------------------------------
+_ALL_SKILLS: list | None = None
+_ALIASES: dict | None = None
+
+
 def load_skills(file_path):
     skills = []
     if os.path.exists(file_path):
@@ -10,6 +20,7 @@ def load_skills(file_path):
                 if skill:
                     skills.append(skill)
     return skills
+
 
 def get_aliases():
     return {
@@ -27,28 +38,36 @@ def get_aliases():
         "Visual Studio Code": "VS Code"
     }
 
-def extract_skills_from_text(text):
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    tech_path = os.path.join(base_dir, 'data', 'tech_skills.txt')
-    non_tech_path = os.path.join(base_dir, 'data', 'non_tech_skills.txt')
 
-    tech_skills = load_skills(tech_path)
-    non_tech_skills = load_skills(non_tech_path)
-    
-    all_skills = tech_skills + non_tech_skills
-    aliases = get_aliases()
-    
+def _get_skills_and_aliases():
+    """
+    Returns (all_skills, aliases) — loaded from disk once and cached in
+    module-level variables for all subsequent calls.
+    """
+    global _ALL_SKILLS, _ALIASES
+    if _ALL_SKILLS is None:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        tech_path = os.path.join(base_dir, 'data', 'tech_skills.txt')
+        non_tech_path = os.path.join(base_dir, 'data', 'non_tech_skills.txt')
+        _ALL_SKILLS = load_skills(tech_path) + load_skills(non_tech_path)
+        _ALIASES = get_aliases()
+    return _ALL_SKILLS, _ALIASES
+
+
+def extract_skills_from_text(text):
+    all_skills, aliases = _get_skills_and_aliases()
+
     extracted_skills = set()
-    
-    # Pre-process text to avoid matching single 'R' incorrectly
+
+    # Pre-process text to avoid matching single 'R' incorrectly.
     # We will search using word boundaries.
     text_lower = text.lower()
-    
+
     for skill in all_skills:
         # Escape skill for regex
         escaped_skill = re.escape(skill)
-        
-        # Word boundary search
+
+        # Word boundary search.
         # If skill is "C++" or "C#", \b might fail due to non-word chars.
         # We handle special cases manually or use more permissive boundaries.
         # If skill is very short (e.g., "R", "C") it needs stricter boundaries.
@@ -58,7 +77,7 @@ def extract_skills_from_text(text):
             pattern = r'(?<![A-Za-z0-9_])' + escaped_skill + r'(?![A-Za-z0-9_])'
         else:
             pattern = r'\b' + escaped_skill + r'\b'
-            
+
         if re.search(pattern, text_lower, re.IGNORECASE):
             # Resolve alias if any
             final_skill = skill
@@ -66,14 +85,14 @@ def extract_skills_from_text(text):
                 if skill.lower() == k.lower():
                     final_skill = v
             extracted_skills.add(final_skill)
-            
+
     # Handle aliases present in text directly (e.g. JS -> JavaScript)
     for k, v in aliases.items():
         escaped_k = re.escape(k)
         if re.search(r'\b' + escaped_k + r'\b', text, re.IGNORECASE):
             extracted_skills.add(v)
-            
+
     # Avoid R false positive if it matched "R" (wait, R is not in our list, we used R Programming)
     # Our tech_skills.txt does not have "R", it has "R Programming" and "RStudio".
-    
+
     return sorted(list(extracted_skills))

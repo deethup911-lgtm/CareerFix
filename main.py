@@ -20,10 +20,15 @@ from modules.skill_gap import analyze_skill_gaps
 
 app = FastAPI(title="CareerFix API")
 
-# Configure CORS for React frontend (running on Vite's default port 5173 or others)
+# Configure CORS for React frontend (Vite default port 5173)
+# ⚠️  PRODUCTION WARNING: Change allow_origins=["*"] to the exact frontend URL
+#     before deploying publicly, e.g.:
+#         allow_origins=["https://yourapp.com", "http://localhost:5173"]
+#     Leaving it as "*" allows any website to make cross-origin requests to
+#     this API, which is a security risk in production environments.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, restrict this to the frontend URL
+    allow_origins=["*"],  # TODO: restrict to frontend URL in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,6 +38,7 @@ class JobSearchRequest(BaseModel):
     roles: List[str]
     locations: List[str]
     job_type: Optional[str] = None
+    candidate_level: Optional[str] = None  # e.g. "Student", "Fresher", "Junior"
 
 class MatchJobsRequest(BaseModel):
     resume_analysis: dict
@@ -76,7 +82,17 @@ def api_analyze_resume(
 @app.post("/api/search-jobs")
 def api_search_jobs(req: JobSearchRequest):
     try:
-        raw_jobs = search_jobs(req.roles, req.locations, job_type_filter=req.job_type)
+        is_student = req.candidate_level == "Student"
+        # Students always get internship search mode regardless of job_type
+        search_internships = is_student or (req.job_type == "Internship")
+        effective_job_type = req.job_type or ("Internship" if is_student else None)
+        raw_jobs = search_jobs(
+            req.roles,
+            req.locations,
+            job_type_filter=effective_job_type,
+            search_internships=search_internships,
+            is_student=is_student
+        )
         return {"jobs": raw_jobs}
     except Exception as e:
         traceback.print_exc()
@@ -115,8 +131,8 @@ def api_match_jobs(req: MatchJobsRequest):
             
             # Batch Cache Lookup
             import torch
-            from modules.embedding_cache import create_cache_db, get_text_hash, get_cached_embedding, save_embedding
-            create_cache_db()
+            from modules.embedding_cache import _ensure_db, get_text_hash, get_cached_embedding, save_embedding
+            _ensure_db()  # Thread-safe one-time DB init (replaces direct create_cache_db())
             
             job_texts = [j['title'] + " " + j['description'] for j in filtered_jobs]
             job_embs = [None] * len(filtered_jobs)
@@ -240,14 +256,42 @@ def api_certifications(req: CertificationRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+POPULAR_LOCATIONS = [
+    "Remote",
+    "India",
+    "United States",
+    "United Kingdom",
+    "Canada",
+    "Australia",
+    "Germany",
+    "France",
+    "Singapore",
+    "Japan",
+    "Netherlands",
+    "Switzerland",
+    "Sweden",
+    "Ireland",
+    "United Arab Emirates",
+    "Brazil",
+    "South Africa",
+    "Spain",
+    "Italy"
+]
+
 @app.get("/api/locations/autocomplete")
 async def location_autocomplete(q: str):
     if not q or len(q) < 2:
         return {"data": []}
         
+    q_lower = q.lower().strip()
+    local_matches = []
+    for loc in POPULAR_LOCATIONS:
+        if loc.lower().startswith(q_lower):
+            local_matches.append(loc)
+            
     api_key = os.getenv("RAPIDAPI_KEY")
     if not api_key:
-        return {"data": []}
+        return {"data": local_matches}
         
     url = "https://wft-geo-db.p.rapidapi.com/v1/geo/cities"
     querystring = {"namePrefix": q, "limit": "5", "sort": "-population"}
@@ -265,10 +309,19 @@ async def location_autocomplete(q: str):
             city = item.get("city")
             country = item.get("countryCode")
             cities.append(f"{city}, {country}")
-        return {"data": cities}
+            
+        # Merge local matches (countries/Remote) and API matches (cities)
+        # Avoid duplicate entries and limit total results to 6 items
+        seen = set(item.lower() for item in local_matches)
+        for c in cities:
+            if c.lower() not in seen:
+                local_matches.append(c)
+                seen.add(c.lower())
+                
+        return {"data": local_matches[:6]}
     except Exception as e:
         print(f"GeoDB Error: {e}")
-        return {"data": []}
+        return {"data": local_matches}
 
 @app.get("/api/cache/stats")
 def api_cache_stats():

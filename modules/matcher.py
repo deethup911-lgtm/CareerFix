@@ -81,17 +81,20 @@ def calculate_match(candidate_profile, job, chroma_collection=None, job_emb=None
     matched_skills_set = set()
     if job_skills_list:
         if chroma_collection and candidate_skills:
-            # --- SEMANTIC MATCHING via ChromaDB ---
-            for js in job_skills_list:
-                results = chroma_collection.query(
-                    query_texts=[js],
-                    n_results=1
-                )
-                if results['distances'] and len(results['distances'][0]) > 0:
-                    distance = results['distances'][0][0]
-                    # A distance < 1.0 means the skills are semantically related!
-                    if distance < 1.0:
-                        matched_skills_set.add(js.lower())
+            # --- BATCHED SEMANTIC MATCHING via ChromaDB ---
+            # Previously: one query() call per skill (N calls per job → N*jobs total).
+            # Now: one query() call with all skills as query_texts → 1 call per job.
+            batch_results = chroma_collection.query(
+                query_texts=job_skills_list,
+                n_results=1
+            )
+            # batch_results['distances'] is a list of lists, one inner list per query_text.
+            # Each inner list contains the distance to the nearest candidate skill in the DB.
+            for idx, js in enumerate(job_skills_list):
+                distances = batch_results['distances'][idx] if idx < len(batch_results['distances']) else []
+                if distances and distances[0] < 1.0:
+                    # A distance < 1.0 means the skill is semantically related to a candidate skill.
+                    matched_skills_set.add(js.lower())
         else:
             # Fallback exact matching
             matched_skills_set = set(s.lower() for s in candidate_skills if s.lower() in [js.lower() for js in job_skills_list])
@@ -110,7 +113,8 @@ def calculate_match(candidate_profile, job, chroma_collection=None, job_emb=None
     
     denominator = (total_required * 0.8) + (total_preferred * 0.2)
     if denominator == 0:
-        skill_match = 100.0
+        # No skills detected in JD — low-signal job; use a neutral score, not 100
+        skill_match = 50.0
     else:
         skill_match = ((len(matched_required) * 0.8 + len(matched_preferred) * 0.2) / denominator) * 100.0
 

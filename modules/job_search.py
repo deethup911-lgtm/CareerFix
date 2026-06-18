@@ -3,8 +3,20 @@ import re
 import concurrent.futures
 import time
 import random
+import threading
 from datetime import datetime, timezone, timedelta
 from .utils import get_env_var
+
+LAST_JSEARCH_STATUS = {
+    "active": False,
+    "skipped": False,
+    "error": None,
+    "success_count": 0
+}
+
+# Lock to protect concurrent writes to LAST_JSEARCH_STATUS from ThreadPoolExecutor workers
+_status_lock = threading.Lock()
+
 
 def parse_date_string(date_str):
     if not date_str:
@@ -31,7 +43,7 @@ def _is_fresh(date_str):
             # We don't filter out here, but we will shift dates in search_jobs.
             return True
         return days_old <= 30
-    except:
+    except Exception:
         pass
     return True  # On parse error, keep the job
 
@@ -157,8 +169,11 @@ def search_remotive_jobs(role, limit=10):
         return []
 
 def search_jsearch_jobs(role, location="Remote", limit=10):
+    global LAST_JSEARCH_STATUS
     rapid_key = get_env_var("RAPIDAPI_KEY")
     if not rapid_key:
+        with _status_lock:
+            LAST_JSEARCH_STATUS["skipped"] = True
         print("Skipping JSearch: RAPIDAPI_KEY missing from .env")
         return []
         
@@ -214,10 +229,13 @@ def search_jsearch_jobs(role, location="Remote", limit=10):
             return jobs
         except Exception as e:
             if attempt == 2:
+                with _status_lock:
+                    LAST_JSEARCH_STATUS["error"] = str(e)
                 print(f"JSearch API Error: {e}")
                 return []
             time.sleep(1.5)
     return []
+
 
 def is_past_event_job(title, today_date):
     """
@@ -274,26 +292,79 @@ def is_past_event_job(title, today_date):
             
     return False
 
-def search_jobs(roles, locations, job_type_filter=None):
+def search_jobs(roles, locations, job_type_filter=None, search_internships=False, is_student=False):
+    global LAST_JSEARCH_STATUS
+    LAST_JSEARCH_STATUS.clear()
+    LAST_JSEARCH_STATUS.update({
+        "active": True,
+        "skipped": False,
+        "error": None,
+        "success_count": 0
+    })
+
     # Expand roles to include base titles (e.g. "AI Engineer" instead of only "Junior AI Engineer")
     # to search more broadly and let experience filters handle the seniority.
     expanded_roles = []
     seen_roles = set()
-    for r in roles:
-        r_clean = r.strip()
-        if not r_clean:
-            continue
-        if r_clean.lower() not in seen_roles:
-            expanded_roles.append(r_clean)
-            seen_roles.add(r_clean.lower())
+    
+    if search_internships:
+        for r in roles:
+            r_clean = r.strip()
+            if not r_clean:
+                continue
             
-        # Strip common junior/entry level prefixes and suffixes indicating entry level positions
-        base_r = re.sub(r'(?i)\b(junior|jr\.?|associate|entry\s+level|trainee|intern)\b', '', r_clean)
-        base_r = re.sub(r'\s+', ' ', base_r).strip()
+            # Clean the role: strip junior, intern, etc.
+            base_r = re.sub(r'(?i)\b(junior|jr\.?|associate|entry\s+level|trainee|intern|internship)\b', '', r_clean)
+            base_r = re.sub(r'\s+', ' ', base_r).strip()
+            if not base_r:
+                base_r = r_clean
+                
+            # Formulate internship queries
+            queries = [
+                f"{base_r} Intern",
+                f"{base_r} Internship",
+                f"{base_r} Summer Internship",
+                f"Summer Internship {base_r}",
+                base_r
+            ]
+
+            # If the candidate is a current student, add student-specific queries
+            # that companies use when posting campus/college-targeted internships
+            if is_student:
+                student_queries = [
+                    f"{base_r} Student Intern",
+                    f"{base_r} Student Internship",
+                    f"Student {base_r} Intern",
+                    f"{base_r} Campus Intern",
+                    f"{base_r} College Intern",
+                    f"{base_r} Graduate Trainee",
+                    f"{base_r} Fresher Intern",
+                    f"Campus Internship {base_r}",
+                ]
+                queries.extend(student_queries)
+
+            for q in queries:
+                if q.lower() not in seen_roles:
+                    expanded_roles.append(q)
+                    seen_roles.add(q.lower())
         
-        if base_r and base_r.lower() not in seen_roles and len(base_r) > 2:
-            expanded_roles.append(base_r)
-            seen_roles.add(base_r.lower())
+        job_type_filter = "Internship"
+    else:
+        for r in roles:
+            r_clean = r.strip()
+            if not r_clean:
+                continue
+            if r_clean.lower() not in seen_roles:
+                expanded_roles.append(r_clean)
+                seen_roles.add(r_clean.lower())
+                
+            # Strip common junior/entry level prefixes and suffixes indicating entry level positions
+            base_r = re.sub(r'(?i)\b(junior|jr\.?|associate|entry\s+level|trainee|intern)\b', '', r_clean)
+            base_r = re.sub(r'\s+', ' ', base_r).strip()
+            
+            if base_r and base_r.lower() not in seen_roles and len(base_r) > 2:
+                expanded_roles.append(base_r)
+                seen_roles.add(base_r.lower())
             
     roles = expanded_roles
     all_jobs = []
@@ -301,20 +372,38 @@ def search_jobs(roles, locations, job_type_filter=None):
     seen_urls = set()   # Also keep URL dedup as backup
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
-        futures = []
+        futures_map = {}
         for role in roles:
-            futures.append(executor.submit(search_remotive_jobs, role))
+            f_rem = executor.submit(search_remotive_jobs, role)
+            futures_map[f_rem] = ("remotive", role, None)
             for loc in locations:
-                futures.append(executor.submit(search_jsearch_jobs, role, loc))
-                futures.append(executor.submit(search_adzuna_jobs, role, loc))
+                f_js = executor.submit(search_jsearch_jobs, role, loc)
+                futures_map[f_js] = ("jsearch", role, loc)
+                f_adz = executor.submit(search_adzuna_jobs, role, loc)
+                futures_map[f_adz] = ("adzuna", role, loc)
                 
-        for future in concurrent.futures.as_completed(futures):
+        for future in concurrent.futures.as_completed(futures_map):
+            api_name, role, loc = futures_map[future]
             try:
                 jobs = future.result()
+                if api_name == "jsearch" and jobs:
+                    with _status_lock:
+                        LAST_JSEARCH_STATUS["success_count"] += len(jobs)
+                    
                 for j in jobs:
                     # Filter by job type if user has specified one
-                    if job_type_filter and j.get("job_type") and job_type_filter.lower() not in j.get("job_type", "").lower():
-                        continue
+                    if job_type_filter:
+                        j_type = (j.get("job_type") or "").lower()
+                        j_title = (j.get("title") or "").lower()
+                        
+                        if job_type_filter.lower() == "internship":
+                            is_intern_type = "intern" in j_type or "trainee" in j_type
+                            is_intern_title = any(k in j_title for k in ["intern", "trainee", "co-op", "apprentice"])
+                            if not (is_intern_type or is_intern_title):
+                                continue
+                        else:
+                            if job_type_filter.lower() not in j_type:
+                                continue
 
                     url = j.get("url") or ""
                     dkey = _dedupe_key(j)
@@ -330,7 +419,10 @@ def search_jobs(roles, locations, job_type_filter=None):
                         seen_keys.add(dkey)
                     all_jobs.append(j)
             except Exception as e:
-                print(f"Concurrent API Fetch Error: {e}")
+                if api_name == "jsearch":
+                    LAST_JSEARCH_STATUS["error"] = str(e)
+                print(f"Concurrent API Fetch Error ({api_name}): {e}")
+
                 
     # --- DYNAMIC DATE SHIFTING ---
     # If the system clock is far ahead of the retrieved jobs (e.g., system is in 2026, APIs are in 2024),
